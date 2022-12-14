@@ -248,7 +248,7 @@ void close_files(FILE *source_path, int dest_path){
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     FILE *source = fopen(source_path,"r");
     int location = tfs_open(dest_path,TFS_O_CREAT);
-    if(location || source == NULL){return -1;}
+    if(location == -1 || source == NULL){return -1;}
     char buffer[128];
     int counter = 0;
     while(counter < 7){
