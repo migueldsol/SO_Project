@@ -253,11 +253,30 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 }
 
 int tfs_unlink(char const *target) {
-    (void)target;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    PANIC("TODO: tfs_unlink");
+    inode_t *root_inode = inode_get(ROOT_DIR_INUM);
+    int i_number = find_in_dir(root_inode, target);
+    inode_t *link_inode = inode_get(i_number);
+    inode_type i_type = link_inode->i_node_type;
+    
+    ALWAYS_ASSERT(clear_dir_entry(root_inode, target) == 0, "tfs_unlink : couldn clear dir entry");
+    switch (i_type){
+        case T_FILE: {
+            if (link_inode->hard_link != 0){
+                link_inode->hard_link--;
+            }
+            else if (link_inode->hard_link == 0) {
+                inode_delete(i_number);
+            }
+        }
+        case T_SYMLINK: {
+            inode_delete(i_number);
+        }
+        case T_DIRECTORY: {
+            ALWAYS_ASSERT(false, "tfs_unlink: cannot unlink directory");
+            return -1;
+        }
+    }
+    return 0;
 }
 
 void close_files(FILE *source_path, int dest_path){
