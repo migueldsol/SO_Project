@@ -241,14 +241,27 @@ int tfs_unlink(char const *target) {
     PANIC("TODO: tfs_unlink");
 }
 
+void close_files(FILE *source_path, int dest_path){
+    fclose(source_path);
+    tfs_close(dest_path);
+}
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
-    int location;
-    location = tfs_open(dest_path,TFS_O_CREAT);
-    if(location){return -1;}
-
-
-    (void)source_path;
-    (void)dest_path;
-
-    PANIC("TODO: tfs_copy_from_external_fs");
+    FILE *source = fopen(source_path,"r");
+    int location = tfs_open(dest_path,TFS_O_CREAT);
+    if(location || source == NULL){return -1;}
+    char buffer[128];
+    int counter = 0;
+    while(counter < 7){
+        memset(buffer,0,sizeof(buffer));
+        size_t words = fread(buffer,sizeof(char),sizeof(buffer),source);
+        if (ferror(source) != 0){
+            close_files(source,location);
+            return -1;
+        }
+        tfs_write(location,buffer,words);
+        counter++;
+    }
+    close_files(source,location);
+    return 0;
+    
 }
