@@ -87,18 +87,20 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
                   "tfs_open: root dir inode must exist");
     int inum = tfs_lookup(name, root_dir_inode);
     size_t offset;
-
-    if (inum >= 0) {
-        // The file already exists
-        inode_t *inode = inode_get(inum);
-        ALWAYS_ASSERT(inode != NULL,
+    inode_t *inode; 
+    if(inum >= 0){
+            inode = = inode_get(inum);
+            ALWAYS_ASSERT(inode != NULL,
                       "tfs_open: directory files must have an inode");
-        if(inode->i_node_type == T_SYMLINK){
             char buffer[inode->i_size];
             memcpy(buffer, data_block_get(inode->i_data_block), inode->i_size);
             inum = tfs_lookup(buffer, root_dir_inode);
             inode = inode_get(inum);
         }
+    if (inum >= 0) {
+        // The file already exists
+        
+        
 
         
         // Truncate (if requested)
@@ -266,11 +268,14 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 int tfs_unlink(char const *target) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
-    int i_number = find_in_dir(root_inode, target);
+    int i_number = find_in_dir(root_inode, target+1);
+    if (i_number == -1){
+        return -1;
+    }
     inode_t *link_inode = inode_get(i_number);
     inode_type i_type = link_inode->i_node_type;
     
-    ALWAYS_ASSERT(clear_dir_entry(root_inode, target) == 0, "tfs_unlink : couldn clear dir entry");
+    ALWAYS_ASSERT(clear_dir_entry(root_inode, target+1) == 0, "tfs_unlink : couldn clear dir entry");
     switch (i_type){
         case T_FILE: {
             if (link_inode->hard_link != 0){
