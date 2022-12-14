@@ -62,7 +62,10 @@ static bool valid_pathname(char const *name) {
  * Returns the inumber of the file, -1 if unsuccessful.
  */
 static int tfs_lookup(char const *name, inode_t const *root_inode) {
-    // TODO: assert that root_inode is the root directory
+    /*
+    int i_number = find_in_dir(root_inode, "");
+    ALWAYS_ASSERT(i_number == ROOT_DIR_INUM, "tfs_lookup: root_inode should be the root");
+    */
     if (!valid_pathname(name)) {
         return -1;
     }
@@ -142,12 +145,14 @@ int tfs_sym_link(char const *target, char const *link_name) {
 }
 
 int tfs_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
+    inode_t *root_inode = inode_get(ROOT_DIR_INUM);
+    int target_i_number = tfs_lookup(target, root_inode);
+    int value = add_dir_entry(root_inode, link_name, target_i_number);
+    ALWAYS_ASSERT(value != -1, "tfs_link: couldn't add dir entry");
+    inode_t *inode = inode_get(target_i_number);
+    inode->hard_link++;
+    return 0;
 
-    PANIC("TODO: tfs_link");
 }
 
 int tfs_close(int fhandle) {
