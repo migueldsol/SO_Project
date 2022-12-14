@@ -136,12 +136,27 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 }
 
 int tfs_sym_link(char const *target, char const *link_name) {
-    (void)target;
-    (void)link_name;
-    // ^ this is a trick to keep the compiler from complaining about unused
-    // variables. TODO: remove
-
-    PANIC("TODO: tfs_sym_link");
+    inode_t *root_inode = inode_get(ROOT_DIR_INUM);
+    int target_i_number = tfs_lookup(target, root_inode);
+    if (add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
+        return -1;
+    }
+    int i_number_softlink = inode_create(T_SYMLINK);
+    if (i_number_softlink == -1){
+        return -1;
+    }
+    inode_t *soft_link = inode_get(i_number_softlink);
+    if (soft_link == NULL){
+        return -1;
+    }
+    soft_link->i_size = strlen(link_name);
+    soft_link->i_data_block = data_block_alloc();
+    if (soft_link->i_data_block == -1){
+        return -1;
+    }
+    void *write = data_block_get( soft_link->i_data_block);
+    memcpy(write, link_name, strlen(link_name));
+    return 0;
 }
 
 int tfs_link(char const *target, char const *link_name) {
@@ -150,8 +165,6 @@ int tfs_link(char const *target, char const *link_name) {
     if (add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
         return -1;
     }
-    inode_t *inode = inode_get(target_i_number);
-    inode->hard_link++;
     return 0;
 
 }
