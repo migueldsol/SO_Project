@@ -465,7 +465,7 @@ void *data_block_get(int block_number) {
  * Possible errors:
  *   - No space in open file table for a new open file.
  */
-int add_to_open_file_table(int inumber, size_t offset) {
+int sadd_to_open_file_table(int inumber, size_t offset) {
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
         if (free_open_file_entries[i] == FREE) {
             free_open_file_entries[i] = TAKEN;
