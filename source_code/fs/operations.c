@@ -147,8 +147,9 @@ int tfs_sym_link(char const *target, char const *link_name) {
 int tfs_link(char const *target, char const *link_name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int target_i_number = tfs_lookup(target, root_inode);
-    int value = add_dir_entry(root_inode, link_name, target_i_number);
-    ALWAYS_ASSERT(value != -1, "tfs_link: couldn't add dir entry");
+    if (add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
+        return -1;
+    }
     inode_t *inode = inode_get(target_i_number);
     inode->hard_link++;
     return 0;
