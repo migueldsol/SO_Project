@@ -90,13 +90,12 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     inode_t *inode; 
     if (inum >= 0){
         inode = inode_get(inum);
-
+        
         // check if the link is a soft_link
         if(inode->i_node_type == T_SYMLINK){
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
-            char buffer[inode->i_size];
-            memcpy(buffer, data_block_get(inode->i_data_block), inode->i_size);
+            char *buffer = data_block_get(inode->i_data_block);
             inum = tfs_lookup(buffer, root_dir_inode);
             // get the inum of the file
         }
