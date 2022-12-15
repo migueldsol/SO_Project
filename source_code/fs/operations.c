@@ -184,19 +184,19 @@ int tfs_sym_link(char const *target, char const *link_name) {
 }
 
 int tfs_link(char const *target, char const *link_name) {
+    
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int target_i_number = tfs_lookup(target, root_inode);
-    int inumber = find_in_dir(root_inode, target + 1);
-    if(inumber != -1){
-        if(inode_get(inumber)->i_node_type == T_SYMLINK){
+    if (target_i_number != -1){
+        inode_t *inode = inode_get(target_i_number);
+        if (inode->i_node_type == T_SYMLINK || add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
             return -1;
         }
+        
+        inode->hard_link++;
+        return 0;
     }
-    if (add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
-        return -1;
-    }
-    return 0;
-
+    return -1;
 }
 
 int tfs_close(int fhandle) {
