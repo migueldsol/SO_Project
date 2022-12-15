@@ -97,6 +97,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
             inum = tfs_lookup(buffer, root_dir_inode);
+            if (inum < 0){
+                return -1;
+            }
             // get the inum of the file
         }
         // The file already exists
@@ -291,10 +294,10 @@ int tfs_unlink(char const *target) {
     ALWAYS_ASSERT(clear_dir_entry(root_inode, target+1) == 0, "tfs_unlink : couldn clear dir entry");
     switch (i_type){
         case T_FILE: {
-            if (link_inode->hard_link != 0){
+            if (link_inode->hard_link != 1){
                 link_inode->hard_link--;
             }
-            else if (link_inode->hard_link == 0) {
+            else if (link_inode->hard_link == 1) {
                 inode_delete(i_number);
             }
         }break;
