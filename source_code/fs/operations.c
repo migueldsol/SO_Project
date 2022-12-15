@@ -88,21 +88,19 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     int inum = tfs_lookup(name, root_dir_inode);
     size_t offset;
     inode_t *inode; 
-    if(inum >= 0){
-            inode = = inode_get(inum);
+    if (inum >= 0){
+        inode = inode_get(inum);
+
+        // check if the link is a soft_link
+        if(inode->i_node_type == T_SYMLINK){
             ALWAYS_ASSERT(inode != NULL,
-                      "tfs_open: directory files must have an inode");
+                    "tfs_open: directory files must have an inode");
             char buffer[inode->i_size];
             memcpy(buffer, data_block_get(inode->i_data_block), inode->i_size);
             inum = tfs_lookup(buffer, root_dir_inode);
-            inode = inode_get(inum);
+            // get the inum of the file
         }
-    if (inum >= 0) {
         // The file already exists
-        
-        
-
-        
         // Truncate (if requested)
         if (mode & TFS_O_TRUNC) {
             if (inode->i_size > 0) {
@@ -144,6 +142,21 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     // opened but it remains created
 }
 
+inode_t* tfs_open_sym_link(int inum, inode_t *root_dir_inode){
+    inode_t *inode = inode_get(inum);
+    if(inode->i_node_type == T_SYMLINK){
+        ALWAYS_ASSERT(inode != NULL,
+                "tfs_open: directory files must have an inode");
+        char buffer[inode->i_size];
+        memcpy(buffer, data_block_get(inode->i_data_block), inode->i_size);
+        inum = tfs_lookup(buffer, root_dir_inode);
+        if (inum >= 0){
+            return inode_get(inum);
+        }
+    }
+    return NULL;
+}
+
 int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int i_number_softlink = inode_create(T_SYMLINK);
@@ -164,6 +177,7 @@ int tfs_sym_link(char const *target, char const *link_name) {
     }
     void *write = data_block_get( soft_link->i_data_block);
     memcpy(write, target, strlen(target));
+    soft_link->hard_link = -1;
     return 0;
 }
 
