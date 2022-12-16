@@ -321,16 +321,8 @@ void close_files(FILE *source_path, int dest_path){
 }
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     FILE *source = fopen(source_path,"r");
-    inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int location;
-
-    if (find_in_dir(root_inode, dest_path) != -1){
-        location = tfs_open(dest_path,TFS_O_APPEND);
-    }
-    else {
-        location = tfs_open(dest_path,TFS_O_CREAT);
-    }
-    
+    location = tfs_open(dest_path,TFS_O_CREAT | TFS_O_TRUNC);
     if(location == -1 || source == NULL){return -1;}
     char buffer[128];
     int counter = 0;
