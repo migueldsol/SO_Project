@@ -1,10 +1,12 @@
 #include "operations.h"
 #include "config.h"
 #include "state.h"
+#include <bits/pthreadtypes.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
 
 #include "betterassert.h"
 
@@ -172,14 +174,17 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if (soft_link == NULL){
         return -1;
     }
+    pthread_rwlock_wrlock(&(soft_link->rw_lock));
     soft_link->i_size = strlen(target);
     soft_link->i_data_block = data_block_alloc();
     if (soft_link->i_data_block == -1){
+        pthread_rwlock_unlock(&(soft_link->rw_lock));
         return -1;
     }
     void *write = data_block_get( soft_link->i_data_block);
     memcpy(write, target, strlen(target));
     soft_link->hard_link = -1;
+    pthread_rwlock_unlock(&(soft_link->rw_lock));
     return 0;
 }
 
@@ -218,6 +223,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
 
     //  From the open file table entry, we get the inode
     inode_t *inode = inode_get(file->of_inumber);
+    pthread_rwlock_wrlock(&(inode->rw_lock));
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     // Determine how many bytes to write
@@ -249,6 +255,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
+    pthread_rwlock_unlock(&(inode->rw_lock));
 
     return (ssize_t)to_write;
 }
@@ -263,6 +270,8 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     inode_t const *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
+    pthread_rwlock_t lock = inode->rw_lock;
+    pthread_rwlock_rdlock(&lock);
     // Determine how many bytes to read
     size_t to_read = inode->i_size - file->of_offset;
     if (to_read > len) {
@@ -278,7 +287,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-
+    pthread_rwlock_unlock(&lock);
     return (ssize_t)to_read;
 }
 
@@ -348,3 +357,5 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     return 0;
     
 }
+
+
