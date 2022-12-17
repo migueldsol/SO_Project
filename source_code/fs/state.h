@@ -12,6 +12,7 @@
 #define DIR_MUTEX_ENTRIE (0)
 #define OPEN_FILE_MUTEX_ENTRIE (1)
 #define INODE_MUTEX_ENTRIE (2)
+#define FREEINODE_MUTEX_ENTRIE (3)
 
 /**
  * Directory entry
