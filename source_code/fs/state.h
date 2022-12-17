@@ -9,6 +9,10 @@
 #include <stdlib.h>
 #include <sys/types.h>
 
+#define DIR_MUTEX_ENTRIE (0)
+#define OPEN_FILE_MUTEX_ENTRIE (1)
+#define INODE_MUTEX_ENTRIE (2)
+
 /**
  * Directory entry
  */
@@ -62,5 +66,7 @@ void *data_block_get(int block_number);
 int add_to_open_file_table(int inumber, size_t offset);
 void remove_from_open_file_table(int fhandle);
 open_file_entry_t *get_open_file_entry(int fhandle);
+
+pthread_mutex_t *get_mutex_table();
 
 #endif // STATE_H

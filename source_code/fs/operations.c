@@ -216,8 +216,12 @@ int tfs_close(int fhandle) {
 }
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
+    
+    pthread_mutex_t *mutex_table = get_mutex_table();
+    pthread_mutex_lock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
+        pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
         return -1;
     }
 
@@ -237,6 +241,8 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             // If empty file, allocate new block
             int bnum = data_block_alloc();
             if (bnum == -1) {
+                pthread_rwlock_unlock(&(inode->rw_lock));
+                pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
                 return -1; // no space
             }
 
@@ -256,13 +262,16 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
         }
     }
     pthread_rwlock_unlock(&(inode->rw_lock));
-
+    pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     return (ssize_t)to_write;
 }
 
 ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
+    pthread_mutex_t *mutex_table = get_mutex_table();
+    pthread_mutex_lock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
+        pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
         return -1;
     }
 
@@ -288,6 +297,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         file->of_offset += to_read;
     }
     pthread_rwlock_unlock(&lock);
+    pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     return (ssize_t)to_read;
 }
 
