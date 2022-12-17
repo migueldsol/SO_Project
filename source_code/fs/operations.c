@@ -94,15 +94,20 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode = inode_get(inum);
         
         // check if the link is a soft_link
+        pthread_rwlock_rdlock(&inode->rw_lock);
         if(inode->i_node_type == T_SYMLINK){
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
+            // get the inum of the file
             inum = tfs_lookup(buffer, root_dir_inode);
             if (inum < 0){
+                pthread_rwlock_unlock(&inode->rw_lock);
                 return -1;
             }
-            // get the inum of the file
+            // set the inode to be the inode of the file 
+            inode = inode_get(inum);
+            // TODO fazer teste com abrir um sym link e alterar o ficheiro de dentro;
         }
         // The file already exists
         // Truncate (if requested)
@@ -118,6 +123,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         } else {
             offset = 0;
         }
+        pthread_rwlock_unlock(&inode->rw_lock);
     } else if (mode & TFS_O_CREAT) {
         // The file does not exist; the mode specified that it should be created
         // Create inode

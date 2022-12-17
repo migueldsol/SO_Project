@@ -51,10 +51,6 @@ int main() {
 
     assert(tfs_init(NULL) != -1);
 
-    // Create file
-    int *fd = malloc(sizeof(int)) ;
-    assert(*fd != -1);
-
     
     // Write to file
     pthread_t t1, t2;
@@ -68,7 +64,6 @@ int main() {
 
     val2 = pthread_join(t2,NULL);
     assert(val2 == 0);
-    assert(tfs_close(*fd) != -1);
 
 
 
