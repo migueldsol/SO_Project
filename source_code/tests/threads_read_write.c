@@ -34,10 +34,10 @@ void *write_file(void *file_path){
 void *read_file(void *file_path){
     unsigned long len = sizeof("Hello World!5");
     char buffer[len];
-    for (int i = 0; i < 100; i++){
+    for (int i = 0; i < 500; i++){
         int fhandle = tfs_open(file_path, TFS_O_CREAT);
         assert(fhandle != -1);
-        tfs_read(fhandle, buffer, 14);
+        assert(tfs_read(fhandle, buffer, 14)!= -1);
         printf("%s\n",buffer);
         tfs_close(fhandle);
     }
