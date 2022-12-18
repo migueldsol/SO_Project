@@ -311,15 +311,18 @@ void inode_delete(int inumber) {
 
     inode_t *inode = inode_get(inumber);
     pthread_rwlock_rdlock(&(inode->rw_lock));
+    /*
     while (inode->open_inode > 0){
         pthread_cond_wait(&fs_inode_cond[inumber],); //TODO nao sei que mutex meter aqui
     }
+    */
 
     pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     if (inode_table[inumber].i_size > 0) {
         data_block_free(inode_table[inumber].i_data_block);
     }
     pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
+    pthread_rwlock_unlock(&(inode->rw_lock));
 
     pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
     freeinode_ts[inumber] = FREE;
@@ -567,11 +570,13 @@ void remove_from_open_file_table(int fhandle) {
     ALWAYS_ASSERT(free_open_file_entries[fhandle] == TAKEN,
                   "remove_from_open_file_table: file handle must be taken");
 
-    free_open_file_entries[fhandle] = FREE;
-
     open_file_entry_t *file = get_open_file_entry(fhandle);
     int inumber = file->of_inumber;
     inode_t *inode = inode_get(inumber);
+    
+    free_open_file_entries[fhandle] = FREE;
+
+    
     pthread_mutex_unlock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
 
     pthread_rwlock_wrlock(&(inode->rw_lock));

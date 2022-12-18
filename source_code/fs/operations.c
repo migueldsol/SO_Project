@@ -79,6 +79,7 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
 }
 
 int tfs_open(char const *name, tfs_file_mode_t mode) {
+    //TODO condições dos locks seguidos
     // Checks if the path name is valid
     if (!valid_pathname(name)) {
         return -1;
@@ -98,17 +99,19 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // check if the link is a soft_link
         pthread_rwlock_rdlock(&inode->rw_lock);
         if(inode->i_node_type == T_SYMLINK){
+            pthread_rwlock_unlock(&(inode->rw_lock));
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
             // get the inum of the file
             inum = tfs_lookup(buffer, root_dir_inode);
             if (inum < 0){
-                pthread_rwlock_unlock(&inode->rw_lock);
                 return -1;
             }
             // set the inode to be the inode of the file 
+
             inode = inode_get(inum);
+            pthread_rwlock_rdlock(&(inode->rw_lock));
             // TODO fazer teste com abrir um sym link e alterar o ficheiro de dentro;
         }
         // The file already exists
@@ -211,7 +214,7 @@ int tfs_close(int fhandle) {
 }
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
-    
+    //TODO verificar os locks seguidos
     pthread_mutex_t *mutex_table = get_mutex_table();
     pthread_mutex_lock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     open_file_entry_t *file = get_open_file_entry(fhandle);
@@ -271,11 +274,10 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     }
 
     // From the open file table entry, we get the inode
-    inode_t const *inode = inode_get(file->of_inumber);
+    inode_t *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
-    pthread_rwlock_t lock = inode->rw_lock;
-    pthread_rwlock_rdlock(&lock);
+    pthread_rwlock_rdlock(&(inode->rw_lock));
     // Determine how many bytes to read
     size_t to_read = inode->i_size - file->of_offset;
     if (to_read > len) {
@@ -291,7 +293,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-    pthread_rwlock_unlock(&lock);
+    pthread_rwlock_unlock(&(inode->rw_lock));
     pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     return (ssize_t)to_read;
 }
