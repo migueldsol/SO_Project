@@ -32,6 +32,7 @@ typedef struct {
     size_t i_size;
     int i_data_block;
     int hard_link;
+    int open_inode;
     pthread_rwlock_t rw_lock;
 
     // in a more complete FS, more fields could exist here

@@ -87,7 +87,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                   "tfs_open: root dir inode must exist");
+    pthread_rwlock_rdlock(&(root_dir_inode->rw_lock));
     int inum = tfs_lookup(name, root_dir_inode);
+    pthread_rwlock_unlock(&(root_dir_inode->rw_lock));
     size_t offset;
     inode_t *inode; 
     if (inum >= 0){
@@ -137,12 +139,12 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             inode_delete(inum);
             return -1; // no space in directory
         }
+        
 
         offset = 0;
     } else {
         return -1;
     }
-
     // Finally, add entry to the open file table and return the corresponding
     // handle
     return add_to_open_file_table(inum, offset);
@@ -152,20 +154,6 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     // opened but it remains created
 }
 
-inode_t* tfs_open_sym_link(int inum, inode_t *root_dir_inode){
-    inode_t *inode = inode_get(inum);
-    if(inode->i_node_type == T_SYMLINK){
-        ALWAYS_ASSERT(inode != NULL,
-                "tfs_open: directory files must have an inode");
-        char buffer[inode->i_size];
-        memcpy(buffer, data_block_get(inode->i_data_block), inode->i_size);
-        inum = tfs_lookup(buffer, root_dir_inode);
-        if (inum >= 0){
-            return inode_get(inum);
-        }
-    }
-    return NULL;
-}
 
 int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
@@ -197,7 +185,9 @@ int tfs_sym_link(char const *target, char const *link_name) {
 int tfs_link(char const *target, char const *link_name) {
     
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
+    pthread_rwlock_rdlock(&(root_inode->rw_lock));
     int target_i_number = tfs_lookup(target, root_inode);
+    pthread_rwlock_unlock(&(root_inode->rw_lock));
     if (target_i_number != -1){
         inode_t *inode = inode_get(target_i_number);
         if (inode->i_node_type == T_SYMLINK || add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
@@ -215,7 +205,6 @@ int tfs_close(int fhandle) {
     if (file == NULL) {
         return -1; // invalid fd
     }
-
     remove_from_open_file_table(fhandle);
 
     return 0;
@@ -309,13 +298,18 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 int tfs_unlink(char const *target) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
+    pthread_rwlock_rdlock(&(root_inode->rw_lock));
     int i_number = find_in_dir(root_inode, target+1);
+    pthread_rwlock_unlock(&(root_inode->rw_lock));
     if (i_number == -1){
         return -1;
     }
     inode_t *link_inode = inode_get(i_number);
+
+    pthread_rwlock_rdlock(&(link_inode->rw_lock));
     inode_type i_type = link_inode->i_node_type;
-    
+    pthread_rwlock_unlock(&(link_inode->rw_lock));
+
     ALWAYS_ASSERT(clear_dir_entry(root_inode, target+1) == 0, "tfs_unlink : couldn clear dir entry");
     switch (i_type){
         case T_FILE: {
