@@ -20,12 +20,11 @@ void *write_file(void *file_path){
     write_contents[3] = write_contents4;
     write_contents[4] = write_contents5;
 
-    unsigned long len = strlen(write_contents[1]);
     for (int j = 0; j < 100; j++){
         for (int i = 0; i < 5; i++){
             int fd = tfs_open((char*)file_path, TFS_O_CREAT);
             assert(fd!=-1);
-            assert(tfs_write(fd, write_contents[i], len) != -1);
+            assert(tfs_write(fd, write_contents[i], 14) != -1);
             tfs_close(fd);
         }
     }
@@ -33,12 +32,12 @@ void *write_file(void *file_path){
 }
 
 void *read_file(void *file_path){
-    unsigned long len = strlen("Hello World!5");
+    unsigned long len = sizeof("Hello World!5");
     char buffer[len];
     for (int i = 0; i < 100; i++){
         int fhandle = tfs_open(file_path, TFS_O_CREAT);
         assert(fhandle != -1);
-        tfs_read(fhandle, buffer, len);
+        tfs_read(fhandle, buffer, 14);
         printf("%s\n",buffer);
         tfs_close(fhandle);
     }
