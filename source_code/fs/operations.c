@@ -98,13 +98,19 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         
         // check if the link is a soft_link
         pthread_rwlock_rdlock(&inode->rw_lock);
+
         while(inode->i_node_type == T_SYMLINK){
-            pthread_rwlock_unlock(&(inode->rw_lock));
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
+            pthread_rwlock_unlock(&(inode->rw_lock));
+            //FIXME help
+
             // get the inum of the file
+            pthread_rwlock_rdlock(&(root_dir_inode->rw_lock));
             inum = tfs_lookup(buffer, root_dir_inode);
+            pthread_rwlock_unlock(&(root_dir_inode->rw_lock));
+
             if (inum < 0){
                 return -1;
             }
@@ -112,7 +118,6 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 
             inode = inode_get(inum);
             pthread_rwlock_rdlock(&(inode->rw_lock));
-            // TODO fazer teste com abrir um sym link e alterar o ficheiro de dentro;
         }
         // The file already exists
         // Truncate (if requested)
@@ -297,6 +302,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 int tfs_unlink(char const *target) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
+    //FIXME lock?
     pthread_rwlock_rdlock(&(root_inode->rw_lock));
     int i_number = find_in_dir(root_inode, target+1);
     pthread_rwlock_unlock(&(root_inode->rw_lock));
