@@ -33,7 +33,6 @@ static allocation_state_t *free_open_file_entries;
 
 //  mutex
 static pthread_mutex_t *fs_mutex;
-static pthread_cond_t *fs_inode_cond;
 
 // Convenience macros
 #define INODE_TABLE_SIZE (fs_params.max_inode_count)
@@ -110,7 +109,6 @@ int state_init(tfs_params params) {
 
     inode_table = malloc(INODE_TABLE_SIZE * sizeof(inode_t));
     freeinode_ts = malloc(INODE_TABLE_SIZE * sizeof(allocation_state_t));
-    fs_inode_cond = malloc(INODE_TABLE_SIZE * sizeof(pthread_cond_t));
 
     fs_data = malloc(DATA_BLOCKS * BLOCK_SIZE);
     free_blocks = malloc(DATA_BLOCKS * sizeof(allocation_state_t));
@@ -134,7 +132,6 @@ int state_init(tfs_params params) {
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         freeinode_ts[i] = FREE;
         pthread_rwlock_init(&(inode_table[i].rw_lock), NULL);
-        pthread_cond_init(&(fs_inode_cond[i]), NULL);
     }
 
     for (size_t i = 0; i < DATA_BLOCKS; i++) {
@@ -167,11 +164,9 @@ int state_destroy(void) {
 
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
             pthread_rwlock_destroy(&(inode_table[i].rw_lock));
-            pthread_cond_destroy(&(fs_inode_cond[i]));
     }
 
     free(fs_mutex);
-    free(fs_inode_cond);
     
 
     inode_table = NULL;
@@ -181,7 +176,6 @@ int state_destroy(void) {
     open_file_table = NULL;
     free_open_file_entries = NULL;
     fs_mutex = NULL;
-    fs_inode_cond = NULL;
 
     return 0;
 }
@@ -273,16 +267,20 @@ int inode_create(inode_type i_type) {
     } break;
     case T_FILE:
         // In case of a new file, simply sets its size to 0
+        pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
         inode_table[inumber].i_size = 0;
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = 0;
+        pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
         break;
     case T_SYMLINK:
+        pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));  
         inode_table[inumber].i_size = 0;
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = -1;
+        pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
         break;
     default:
         PANIC("inode_create: unknown file type");
@@ -307,15 +305,12 @@ void inode_delete(int inumber) {
     pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
     ALWAYS_ASSERT(freeinode_ts[inumber] == TAKEN,
                   "inode_delete: inode already freed");
+    
+    freeinode_ts[inumber] = FREE;
     pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
 
     inode_t *inode = inode_get(inumber);
     pthread_rwlock_rdlock(&(inode->rw_lock));
-    /*
-    while (inode->open_inode > 0){
-        pthread_cond_wait(&fs_inode_cond[inumber],); //TODO nao sei que mutex meter aqui
-    }
-    */
 
     pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     if (inode_table[inumber].i_size > 0) {
@@ -323,10 +318,6 @@ void inode_delete(int inumber) {
     }
     pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     pthread_rwlock_unlock(&(inode->rw_lock));
-
-    pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
-    freeinode_ts[inumber] = FREE;
-    pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
 }
 
 /**
@@ -575,15 +566,13 @@ void remove_from_open_file_table(int fhandle) {
     inode_t *inode = inode_get(inumber);
     
     free_open_file_entries[fhandle] = FREE;
-
-    
     pthread_mutex_unlock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
 
+
     pthread_rwlock_wrlock(&(inode->rw_lock));
+
+    inode->open_inode--;
     
-    if (inode->open_inode-- == 0){
-        pthread_cond_signal(&fs_inode_cond[inumber]);
-    }
     pthread_rwlock_unlock(&(inode->rw_lock));
 }
 
