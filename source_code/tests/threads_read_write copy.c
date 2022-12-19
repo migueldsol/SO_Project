@@ -6,20 +6,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+const char write_contents1[] = "Hello World!1";
+const char write_contents2[] = "Hello World!2";
+const char write_contents3[] = "Hello World!3";
+const char write_contents4[] = "Hello World!4";
+const char write_contents5[] = "Hello World!5";
+const char **write_contents = malloc(sizeof(char*) * 5);
+write_contents[0] = write_contents1;
+write_contents[1] = write_contents2;
+write_contents[2] = write_contents3;
+write_contents[3] = write_contents4;
+write_contents[4] = write_contents5;
 
 void *write_file(void *file_path){
-    const char write_contents1[] = "Hello World!1";
-    const char write_contents2[] = "Hello World!2";
-    const char write_contents3[] = "Hello World!3";
-    const char write_contents4[] = "Hello World!4";
-    const char write_contents5[] = "Hello World!5";
-    const char **write_contents = malloc(sizeof(char*) * 5);
-    write_contents[0] = write_contents1;
-    write_contents[1] = write_contents2;
-    write_contents[2] = write_contents3;
-    write_contents[3] = write_contents4;
-    write_contents[4] = write_contents5;
-
     for (int j = 0; j < 100; j++){
         for (int i = 0; i < 5; i++){
             int fd = tfs_open((char*)file_path, TFS_O_CREAT);
@@ -35,11 +34,13 @@ void *read_file(void *file_path){
     unsigned long len = sizeof("Hello World!5");
     char buffer[len];
     for (int i = 0; i < 500; i++){
-        int fhandle = tfs_open(file_path, TFS_O_CREAT);
-        assert(fhandle != -1);
-        assert(tfs_read(fhandle, buffer, 14)!= -1);
-        printf("%s\n",buffer);
-        tfs_close(fhandle);
+        for(int i =0; i <5;i++){
+            int fhandle = tfs_open(file_path, TFS_O_CREAT);
+            assert(fhandle != -1);
+            assert(tfs_read(fhandle, buffer, 14)!= -1);
+            assert(buffer == write_contents[i]);
+            tfs_close(fhandle);
+        }
     }
     return 0;
 }
