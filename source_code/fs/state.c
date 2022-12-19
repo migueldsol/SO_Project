@@ -341,6 +341,7 @@ inode_t *inode_get(int inumber) {
     ALWAYS_ASSERT(valid_inumber(inumber), "inode_get: invalid inumber");
 
     insert_delay(); // simulate storage access delay to inode
+
     return &inode_table[inumber];
 }
 
@@ -450,7 +451,6 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
     if (inode->i_node_type != T_DIRECTORY) {
         return -1; // not a directory
     }
-
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
     ALWAYS_ASSERT(dir_entry != NULL,
