@@ -97,8 +97,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode = inode_get(inum);
         
         // check if the link is a soft_link
+        
         pthread_rwlock_rdlock(&inode->rw_lock);
-        if(inode->i_node_type == T_SYMLINK){
+        while (inode->i_node_type == T_SYMLINK){
             pthread_rwlock_unlock(&(inode->rw_lock));
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
@@ -161,10 +162,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int i_number_softlink = inode_create(T_SYMLINK);
-    if (i_number_softlink == -1){
-        return -1;
-    }
-    if (add_dir_entry(root_inode, link_name + 1, i_number_softlink) == -1){
+    if (i_number_softlink == -1 || add_dir_entry(root_inode, link_name + 1, i_number_softlink) == -1){
         return -1;
     }
     inode_t *soft_link = inode_get(i_number_softlink);
