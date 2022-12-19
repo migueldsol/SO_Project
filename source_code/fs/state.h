@@ -34,7 +34,6 @@ typedef struct {
     int hard_link;
     int open_inode;
     pthread_rwlock_t rw_lock;
-    pthread_cond_t condDelete;
 
     // in a more complete FS, more fields could exist here
 } inode_t;

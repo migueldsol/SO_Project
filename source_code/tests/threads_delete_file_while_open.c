@@ -21,7 +21,7 @@ void *write_file(void *file_path){
 void *open_file(void *file_path){
     sleep(1);
     int fhandle = tfs_open(file_path, TFS_O_APPEND);
-    assert(tfs_unlink(file_path) == 0);
+    assert(tfs_unlink(file_path) == -1);
     assert(tfs_close(fhandle)== 0);
     assert(fhandle != -1);
     return 0;
