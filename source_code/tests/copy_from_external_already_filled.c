@@ -4,6 +4,8 @@
 #include <string.h>
 
 int main() {
+
+    // tests if the copy_from_external clears the file before writing
     
     char *str_new_file = "BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB! BBB!";
     unsigned long new_file_len = strlen(str_new_file);
@@ -31,7 +33,7 @@ int main() {
 
     r = tfs_read(f, buffer, sizeof(buffer));    //copies the text inside the file
     assert(r == compare_len);
-    assert(!memcmp(buffer, str_to_compare, compare_len));           
+    assert(!memcmp(buffer, str_to_compare, compare_len));   //verifies that the small text is there        
 
     printf("Successful test.\n");
 
