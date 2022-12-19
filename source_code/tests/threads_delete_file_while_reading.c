@@ -38,7 +38,6 @@ void *read_file(void *file_path){
         int fhandle = tfs_open(file_path, TFS_O_CREAT);
         assert(fhandle != -1);
         assert(tfs_read(fhandle, buffer, 14)!= -1);
-        printf("Read: %s\n", buffer);
         tfs_close(fhandle);
     }
     return 0;
