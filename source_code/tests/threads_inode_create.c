@@ -10,20 +10,16 @@
 
 
 void *create_inode_FILE(){
-    for (int i = 0; i < 100; i++){
+    for (int i = 0; i < 63; i++){
         int val = inode_create(T_FILE);
-        if (val == -1){
-            printf("exceceu max\n");
-            printf("%d",i);
-            break;
-        }
+        assert(val != -1);
     }
     return 0;
 }
 
 void *create_inode_DIR(){
-    sleep(1/10);
-    for (int i = 0; i < 64; i++){
+    sleep(1);
+    for (int i = 0; i < 63; i++){
         inode_delete(i);
     }
     return 0;
@@ -46,6 +42,8 @@ int main() {
 
     val2 = pthread_join(t2,NULL);
     assert(val2 == 0);
+
+    assert(tfs_destroy() == 0);
 
     printf("Successful test.\n");
 }
