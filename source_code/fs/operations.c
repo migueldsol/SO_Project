@@ -228,6 +228,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     //  From the open file table entry, we get the inode
     inode_t *inode = inode_get(file->of_inumber);
     pthread_rwlock_wrlock(&(inode->rw_lock));
+    pthread_mutex_lock(&(mutex_table[INODE_MUTEX_ENTRIE]));
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     // Determine how many bytes to write
@@ -241,6 +242,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             // If empty file, allocate new block
             int bnum = data_block_alloc();
             if (bnum == -1) {
+                pthread_mutex_unlock(&(mutex_table[INODE_MUTEX_ENTRIE]));
                 pthread_rwlock_unlock(&(inode->rw_lock));
                 pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
                 return -1; // no space
@@ -261,6 +263,7 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
+    pthread_mutex_unlock(&(mutex_table[INODE_MUTEX_ENTRIE]));
     pthread_rwlock_unlock(&(inode->rw_lock));
     pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
     return (ssize_t)to_write;
