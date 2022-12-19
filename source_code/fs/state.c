@@ -277,6 +277,7 @@ int inode_create(inode_type i_type) {
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = 0;
+        pthread_cond_init(&(inode_table[inumber].condDelete), NULL);
         break;
     case T_SYMLINK:
         inode_table[inumber].i_size = 0;
@@ -311,17 +312,16 @@ void inode_delete(int inumber) {
 
     inode_t *inode = inode_get(inumber);
     pthread_rwlock_rdlock(&(inode->rw_lock));
+    pthread_cond_destroy(&(inode->condDelete));
     /*
     while (inode->open_inode > 0){
         pthread_cond_wait(&fs_inode_cond[inumber],); //TODO nao sei que mutex meter aqui
     }
     */
 
-    pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     if (inode_table[inumber].i_size > 0) {
         data_block_free(inode_table[inumber].i_data_block);
     }
-    pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     pthread_rwlock_unlock(&(inode->rw_lock));
 
     pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
