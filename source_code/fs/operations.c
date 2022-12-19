@@ -97,9 +97,8 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         inode = inode_get(inum);
         
         // check if the link is a soft_link
-        
         pthread_rwlock_rdlock(&inode->rw_lock);
-        while (inode->i_node_type == T_SYMLINK){
+        while(inode->i_node_type == T_SYMLINK){
             pthread_rwlock_unlock(&(inode->rw_lock));
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
@@ -134,28 +133,23 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // The file does not exist; the mode specified that it should be created
         // Create inode
         inum = inode_create(T_FILE);
-        inode = inode_get(inum);
         if (inum == -1) {
             return -1; // no space in inode table
         }
 
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
-            pthread_mutex_t *fs_mutex = get_mutex_table();
-            pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
             inode_delete(inum);
-            pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
             return -1; // no space in directory
         }
+        
+
         offset = 0;
     } else {
         return -1;
     }
     // Finally, add entry to the open file table and return the corresponding
     // handle
-    pthread_rwlock_wrlock(&(inode->rw_lock));
-    inode->open_inode++;
-    pthread_rwlock_unlock(&(inode->rw_lock));
     return add_to_open_file_table(inum, offset);
 
     // Note: for simplification, if file was created with TFS_O_CREAT and there
@@ -167,7 +161,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
 int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int i_number_softlink = inode_create(T_SYMLINK);
-    if (i_number_softlink == -1 || add_dir_entry(root_inode, link_name + 1, i_number_softlink) == -1){
+    if (add_dir_entry(root_inode, link_name + 1, i_number_softlink) == -1 || i_number_softlink == -1){
         return -1;
     }
     inode_t *soft_link = inode_get(i_number_softlink);
@@ -211,16 +205,6 @@ int tfs_close(int fhandle) {
     if (file == NULL) {
         return -1; // invalid fd
     }
-    inode_t *inode = inode_get(file->of_inumber);
-    pthread_rwlock_wrlock(&(inode->rw_lock));
-    inode->open_inode--;
-    pthread_rwlock_unlock(&(inode->rw_lock));
-    pthread_rwlock_rdlock(&(inode->rw_lock));
-    if(inode->open_inode == 0 && inode->hard_link == 0){
-        pthread_rwlock_unlock(&(inode->rw_lock));
-        pthread_cond_signal(&(inode->condDelete));
-    }
-    pthread_rwlock_unlock(&(inode->rw_lock));
     remove_from_open_file_table(fhandle);
 
     return 0;
@@ -326,19 +310,16 @@ int tfs_unlink(char const *target) {
     pthread_rwlock_unlock(&(link_inode->rw_lock));
 
     ALWAYS_ASSERT(clear_dir_entry(root_inode, target+1) == 0, "tfs_unlink : couldn clear dir entry");
-    pthread_mutex_t *fs_mutex = get_mutex_table();
-    pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     switch (i_type){
         case T_FILE: {
             if (link_inode->hard_link != 1){
                 link_inode->hard_link--;
             }
-            else if (link_inode->hard_link == 1) {
-                link_inode->hard_link--;
-                while(link_inode->open_inode > 1){
-                    pthread_cond_wait(&(link_inode->condDelete),&(fs_mutex[INODE_MUTEX_ENTRIE]));
-                }
+            else if (link_inode->hard_link == 1 && link_inode->open_inode == 0) {
                 inode_delete(i_number);
+            }
+            else{
+                return -1;
             }
         }break;
         case T_SYMLINK: {
@@ -346,14 +327,12 @@ int tfs_unlink(char const *target) {
         }break;
         case T_DIRECTORY: {
             ALWAYS_ASSERT(false, "tfs_unlink: cannot unlink directory");
-            pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
             return -1;
         }break;
         default: {
             PANIC("tfs_unlink: unknown inode type");
         }
     }
-    pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     return 0;
 }
 
@@ -382,5 +361,4 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     return 0;
     
 }
-
 
