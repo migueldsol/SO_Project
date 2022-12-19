@@ -310,7 +310,7 @@ void inode_delete(int inumber) {
     pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
 
     inode_t *inode = inode_get(inumber);
-    pthread_rwlock_rdlock(&(inode->rw_lock));
+    pthread_rwlock_wrlock(&(inode->rw_lock));
 
     pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     if (inode_table[inumber].i_size > 0) {
