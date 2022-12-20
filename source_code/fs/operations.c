@@ -3,6 +3,7 @@
 #include "state.h"
 #include <bits/pthreadtypes.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,10 +104,9 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
-            printf("%zd, %s\n", inode->i_size, buffer);
-            char path_name[inode->i_size];
-            memcpy(path_name, buffer, inode->i_size);
-            printf("%s\n",path_name);            pthread_rwlock_unlock(&(inode->rw_lock));
+            char *path_name = malloc(sizeof(char) * inode->i_size);
+            memcpy(path_name, buffer, sizeof(char)*inode->i_size);
+            pthread_rwlock_unlock(&(inode->rw_lock));
             //FIXME help
 
             // get the inum of the file
@@ -361,16 +361,26 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     location = tfs_open(dest_path,TFS_O_CREAT | TFS_O_TRUNC);
     if(location == -1 || source == NULL){return -1;}
     char buffer[128];
-    int counter = 0;
-    while(counter < 7){
-        memset(buffer,0,sizeof(buffer));
-        size_t words = fread(buffer,sizeof(char),sizeof(buffer),source);
+    size_t block_size = state_block_size();
+    size_t  counter = 0;
+    size_t to_write = 0;
+    memset(buffer,0,sizeof(buffer));
+    size_t words = fread(buffer,sizeof(char),sizeof(buffer),source);
+    while(words != 0 && counter < block_size){
         if (ferror(source) != 0){
             close_files(source,location);
             return -1;
         }
-        tfs_write(location,buffer,words);
-        counter++;
+        if (counter + words > block_size) {
+            to_write = block_size - counter;
+        }
+        else {
+            to_write = words;
+        }
+        tfs_write(location,buffer,to_write);
+        counter += to_write;
+        memset(buffer,0,sizeof(buffer));
+        words = fread(buffer,sizeof(char),sizeof(buffer),source);
     }
     close_files(source,location);
     return 0;
