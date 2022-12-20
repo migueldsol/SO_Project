@@ -190,6 +190,7 @@ int state_destroy(void) {
  *   - No free slots in inode table.
  */
 static int inode_alloc(void) {
+    //SOL esta bem
     pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
     for (size_t inumber = 0; inumber < INODE_TABLE_SIZE; inumber++) {
         if ((inumber * sizeof(allocation_state_t) % BLOCK_SIZE) == 0) {
@@ -229,12 +230,14 @@ static int inode_alloc(void) {
  *   - (if creating a directory) No free data blocks.
  */
 int inode_create(inode_type i_type) {
+    //SOL esta bem
     int inumber = inode_alloc();
     if (inumber == -1) {
         return -1; // no free slots in inode table
     }
     inode_t *inode = &inode_table[inumber];
     insert_delay(); // simulate storage access delay (to inode)
+    pthread_rwlock_wrlock(&(inode->rw_lock));
 
     inode->i_node_type = i_type;
     switch (i_type) {
@@ -248,6 +251,7 @@ int inode_create(inode_type i_type) {
             inode->i_data_block = -1;
             inode->hard_link = -1;
             inode->open_inode = 0;
+            pthread_rwlock_unlock(&(inode->rw_lock)); //FIXME pode ser que nao e suposto estar aqui
             // run regular deletion process
             inode_delete(inumber);
             return -1;
@@ -259,28 +263,27 @@ int inode_create(inode_type i_type) {
         ALWAYS_ASSERT(dir_entry != NULL,
                       "inode_create: data block freed while in use");
 
-        pthread_mutex_lock(&(fs_mutex[DIR_MUTEX_ENTRIE]));
         for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
             dir_entry[i].d_inumber = -1;
         }
-        pthread_mutex_unlock(&(fs_mutex[DIR_MUTEX_ENTRIE]));
+        pthread_rwlock_unlock(&(inode->rw_lock)); //FIXME pode ser que nao e suposto estar aqui
     } break;
     case T_FILE:
         // In case of a new file, simply sets its size to 0
-        pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
+        pthread_rwlock_wrlock(&(inode->rw_lock));
         inode_table[inumber].i_size = 0;
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = 0;
-        pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
+        pthread_rwlock_unlock(&(inode->rw_lock)); //FIXME pode ser que nao e suposto estar aqui
         break;
     case T_SYMLINK:
-        pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));  
+        pthread_rwlock_wrlock(&(inode->rw_lock));
         inode_table[inumber].i_size = 0;
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = -1;
-        pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
+        pthread_rwlock_unlock(&(inode->rw_lock)); //FIXME pode ser que nao e suposto estar aqui
         break;
     default:
         PANIC("inode_create: unknown file type");
@@ -312,11 +315,9 @@ void inode_delete(int inumber) {
     inode_t *inode = inode_get(inumber);
     pthread_rwlock_wrlock(&(inode->rw_lock));
 
-    pthread_mutex_lock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     if (inode_table[inumber].i_size > 0) {
         data_block_free(inode_table[inumber].i_data_block);
     }
-    pthread_mutex_unlock(&(fs_mutex[INODE_MUTEX_ENTRIE]));
     pthread_rwlock_unlock(&(inode->rw_lock));
 }
 
@@ -327,6 +328,10 @@ void inode_delete(int inumber) {
  *   - inumber: inode's number
  *
  * Returns pointer to inode.
+ *
+ ******************************
+ *PRECISAMOS DAR LOCK AO INODE
+ ******************************
  */
 inode_t *inode_get(int inumber) {
     ALWAYS_ASSERT(valid_inumber(inumber), "inode_get: invalid inumber");
@@ -350,8 +355,8 @@ inode_t *inode_get(int inumber) {
  *   - Directory does not contain an entry for sub_name.
  */
 int clear_dir_entry(inode_t *inode, char const *sub_name) {
-    pthread_rwlock_wrlock(&(inode->rw_lock));
     insert_delay();
+    pthread_rwlock_wrlock(&(inode->rw_lock));
     if (inode->i_node_type != T_DIRECTORY) {
         pthread_rwlock_unlock(&(inode->rw_lock));
         return -1; // not a directory
@@ -438,6 +443,9 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
     ALWAYS_ASSERT(inode != NULL, "find_in_dir: inode must be non-NULL");
     ALWAYS_ASSERT(sub_name != NULL, "find_in_dir: sub_name must be non-NULL");
 
+    //SOL decidir se usamos tabela em vez de colocar na estrutura
+    //  porque aqui precisamos de aceder ao inode mas nao da
+
     insert_delay(); // simulate storage access delay to inode with inumber
     if (inode->i_node_type != T_DIRECTORY) {
         return -1; // not a directory
@@ -473,12 +481,13 @@ int data_block_alloc(void) {
         if (i * sizeof(allocation_state_t) % BLOCK_SIZE == 0) {
             insert_delay(); // simulate storage access delay to free_blocks
         }
-
+        pthread_mutex_lock(&(fs_mutex[FREE_BLOCK_MUTEX_ENTRIE]));
         if (free_blocks[i] == FREE) {
             free_blocks[i] = TAKEN;
-
+            pthread_mutex_unlock(&(fs_mutex[FREE_BLOCK_MUTEX_ENTRIE]));
             return (int)i;
         }
+        pthread_mutex_unlock(&(fs_mutex[FREE_BLOCK_MUTEX_ENTRIE]));
     }
     return -1;
 }
@@ -494,8 +503,9 @@ void data_block_free(int block_number) {
                   "data_block_free: invalid block number");
 
     insert_delay(); // simulate storage access delay to free_blocks
-
+    pthread_mutex_lock(&(fs_mutex[FREE_BLOCK_MUTEX_ENTRIE]));
     free_blocks[block_number] = FREE;
+    pthread_mutex_unlock(&(fs_mutex[FREE_BLOCK_MUTEX_ENTRIE]));
 }
 
 /**
@@ -505,6 +515,10 @@ void data_block_free(int block_number) {
  *   - block_number: the block number/index
  *
  * Returns a pointer to the first byte of the block.
+ *
+ ******************************
+ * PRECISAMOS DAR LOCK AO INODE
+ *******************************
  */
 void *data_block_get(int block_number) {
     ALWAYS_ASSERT(valid_block_number(block_number),
@@ -584,6 +598,10 @@ void remove_from_open_file_table(int fhandle) {
  *
  * Returns pointer to the entry, or NULL if the fhandle is invalid/closed/never
  * opened.
+ *
+ ************************************
+ * TEMOS QUE DAR LOCK NO OPEN_FILE
+ ************************************
  */
 open_file_entry_t *get_open_file_entry(int fhandle) {
     if (!valid_file_handle(fhandle)) {

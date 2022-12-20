@@ -103,12 +103,15 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
-            pthread_rwlock_unlock(&(inode->rw_lock));
+            printf("%zd, %s\n", inode->i_size, buffer);
+            char path_name[inode->i_size];
+            memcpy(path_name, buffer, inode->i_size);
+            printf("%s\n",path_name);            pthread_rwlock_unlock(&(inode->rw_lock));
             //FIXME help
 
             // get the inum of the file
             pthread_rwlock_rdlock(&(root_dir_inode->rw_lock));
-            inum = tfs_lookup(buffer, root_dir_inode);
+            inum = tfs_lookup(path_name, root_dir_inode);
             pthread_rwlock_unlock(&(root_dir_inode->rw_lock));
 
             if (inum < 0){
