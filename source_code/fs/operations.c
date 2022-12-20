@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-
 #include "betterassert.h"
 
 tfs_params tfs_default_params() {
@@ -18,6 +17,29 @@ tfs_params tfs_default_params() {
         .block_size = 1024,
     };
     return params;
+}
+
+void pthread_write_lock(inode_t *inode){
+    ALWAYS_ASSERT(pthread_rwlock_wrlock(&(inode->rw_lock)) == 0
+    ,"pthread_write_lock: failed to lock");
+}
+void pthread_wr_unlock(inode_t *inode){
+    ALWAYS_ASSERT(pthread_rwlock_unlock(&(inode->rw_lock)) == 0
+    ,"pthread_write_unlock: failed to unlock");
+}
+void pthread_read_lock(inode_t *inode){
+    ALWAYS_ASSERT(pthread_rwlock_rdlock(&(inode->rw_lock)) == 0
+    ,"pthread_read_lock: failed to lock");
+}
+void pthread_m_lock(int type){
+    pthread_mutex_t *fs_mutex = get_mutex_table();
+    ALWAYS_ASSERT(pthread_mutex_lock(&fs_mutex[type]) == 0
+    ,"pthread_mutex_lock: failed to lock");
+}
+void pthread_m_unlock(int type){
+    pthread_mutex_t *fs_mutex = get_mutex_table();
+    ALWAYS_ASSERT(pthread_mutex_unlock(&fs_mutex[type]) == 0
+    ,"pthread_mutex_unlock: failed to unlock");
 }
 
 int tfs_init(tfs_params const *params_ptr) {
@@ -88,31 +110,30 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     inode_t *root_dir_inode = inode_get(ROOT_DIR_INUM);
     ALWAYS_ASSERT(root_dir_inode != NULL,
                   "tfs_open: root dir inode must exist");
-    pthread_rwlock_rdlock(&(root_dir_inode->rw_lock));
+    pthread_read_lock(root_dir_inode);
     int inum = tfs_lookup(name, root_dir_inode);
-    pthread_rwlock_unlock(&(root_dir_inode->rw_lock));
+    pthread_wr_unlock(root_dir_inode);
     size_t offset;
     inode_t *inode; 
     if (inum >= 0){
         inode = inode_get(inum);
         
         // check if the link is a soft_link
-        pthread_rwlock_rdlock(&inode->rw_lock);
+        pthread_read_lock(inode);
 
         while(inode->i_node_type == T_SYMLINK){
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
-            printf("%zd, %s\n", inode->i_size, buffer);
-            char path_name[inode->i_size];
+            char *path_name = malloc(sizeof(char)*inode->i_size);
             memcpy(path_name, buffer, inode->i_size);
-            printf("%s\n",path_name);            pthread_rwlock_unlock(&(inode->rw_lock));
+            pthread_wr_unlock(inode);
             //FIXME help
 
             // get the inum of the file
-            pthread_rwlock_rdlock(&(root_dir_inode->rw_lock));
+            pthread_read_lock(root_dir_inode);
             inum = tfs_lookup(path_name, root_dir_inode);
-            pthread_rwlock_unlock(&(root_dir_inode->rw_lock));
+            pthread_wr_unlock(root_dir_inode);
 
             if (inum < 0){
                 return -1;
@@ -120,7 +141,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             // set the inode to be the inode of the file 
 
             inode = inode_get(inum);
-            pthread_rwlock_rdlock(&(inode->rw_lock));
+            pthread_read_lock(inode);
         }
         // The file already exists
         // Truncate (if requested)
@@ -136,7 +157,7 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         } else {
             offset = 0;
         }
-        pthread_rwlock_unlock(&inode->rw_lock);
+        pthread_wr_unlock(inode);
     } else if (mode & TFS_O_CREAT) {
         // The file does not exist; the mode specified that it should be created
         // Create inode
@@ -176,30 +197,29 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if (soft_link == NULL){
         return -1;
     }
-    pthread_mutex_t *fs_mutex = get_mutex_table();
-    pthread_rwlock_wrlock(&(soft_link->rw_lock));
-    pthread_mutex_lock(&fs_mutex[INODE_MUTEX_ENTRIE]);
+    pthread_write_lock(soft_link);
+    pthread_m_lock(INODE_MUTEX_ENTRIE);
     soft_link->i_size = strlen(target);
     soft_link->i_data_block = data_block_alloc();
     if (soft_link->i_data_block == -1){
-        pthread_mutex_unlock(&fs_mutex[INODE_MUTEX_ENTRIE]);
-        pthread_rwlock_unlock(&(soft_link->rw_lock));
+        pthread_m_unlock(INODE_MUTEX_ENTRIE);
+        pthread_wr_unlock(soft_link);
         return -1;
     }
     void *write = data_block_get( soft_link->i_data_block);
     memcpy(write, target, strlen(target));
     soft_link->hard_link = -1;
-    pthread_mutex_unlock(&fs_mutex[INODE_MUTEX_ENTRIE]);
-    pthread_rwlock_unlock(&(soft_link->rw_lock));
+    pthread_m_unlock(INODE_MUTEX_ENTRIE);
+    pthread_wr_unlock(soft_link);
     return 0;
 }
 
 int tfs_link(char const *target, char const *link_name) {
     
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
-    pthread_rwlock_rdlock(&(root_inode->rw_lock));
+    pthread_read_lock(root_inode);
     int target_i_number = tfs_lookup(target, root_inode);
-    pthread_rwlock_unlock(&(root_inode->rw_lock));
+    pthread_wr_unlock(root_inode);
     if (target_i_number != -1){
         inode_t *inode = inode_get(target_i_number);
         if (inode->i_node_type == T_SYMLINK || add_dir_entry(root_inode, link_name + 1, target_i_number) == -1){
@@ -224,18 +244,17 @@ int tfs_close(int fhandle) {
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
     //TODO verificar os locks seguidos
-    pthread_mutex_t *mutex_table = get_mutex_table();
-    pthread_mutex_lock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+    pthread_m_lock(OPEN_FILE_MUTEX_ENTRIE);
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
-        pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+        pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
         return -1;
     }
 
     //  From the open file table entry, we get the inode
     inode_t *inode = inode_get(file->of_inumber);
-    pthread_rwlock_wrlock(&(inode->rw_lock));
-    pthread_mutex_lock(&(mutex_table[INODE_MUTEX_ENTRIE]));
+    pthread_write_lock(inode);
+    pthread_m_lock(INODE_MUTEX_ENTRIE);
     ALWAYS_ASSERT(inode != NULL, "tfs_write: inode of open file deleted");
 
     // Determine how many bytes to write
@@ -249,9 +268,9 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             // If empty file, allocate new block
             int bnum = data_block_alloc();
             if (bnum == -1) {
-                pthread_mutex_unlock(&(mutex_table[INODE_MUTEX_ENTRIE]));
-                pthread_rwlock_unlock(&(inode->rw_lock));
-                pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+                pthread_m_unlock(INODE_MUTEX_ENTRIE);
+                pthread_wr_unlock(inode);
+                pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
                 return -1; // no space
             }
 
@@ -270,18 +289,17 @@ ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
             inode->i_size = file->of_offset;
         }
     }
-    pthread_mutex_unlock(&(mutex_table[INODE_MUTEX_ENTRIE]));
-    pthread_rwlock_unlock(&(inode->rw_lock));
-    pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+    pthread_m_unlock(INODE_MUTEX_ENTRIE);
+    pthread_wr_unlock(inode);
+    pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
     return (ssize_t)to_write;
 }
 
 ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
-    pthread_mutex_t *mutex_table = get_mutex_table();
-    pthread_mutex_lock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+    pthread_m_lock(OPEN_FILE_MUTEX_ENTRIE);
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
-        pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+        pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
         return -1;
     }
 
@@ -289,7 +307,7 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
     inode_t *inode = inode_get(file->of_inumber);
     ALWAYS_ASSERT(inode != NULL, "tfs_read: inode of open file deleted");
 
-    pthread_rwlock_rdlock(&(inode->rw_lock));
+    pthread_read_lock(inode);
     // Determine how many bytes to read
     size_t to_read = inode->i_size - file->of_offset;
     if (to_read > len) {
@@ -305,30 +323,32 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
         // The offset associated with the file handle is incremented accordingly
         file->of_offset += to_read;
     }
-    pthread_rwlock_unlock(&(inode->rw_lock));
-    pthread_mutex_unlock(&(mutex_table[OPEN_FILE_MUTEX_ENTRIE]));
+    pthread_wr_unlock(inode);
+    pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
     return (ssize_t)to_read;
 }
 
 int tfs_unlink(char const *target) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     //FIXME lock?
-    pthread_rwlock_rdlock(&(root_inode->rw_lock));
+    pthread_read_lock(root_inode);
     int i_number = find_in_dir(root_inode, target+1);
-    pthread_rwlock_unlock(&(root_inode->rw_lock));
+    pthread_wr_unlock(root_inode);
     if (i_number == -1){
         return -1;
     }
     inode_t *link_inode = inode_get(i_number);
 
-    pthread_rwlock_rdlock(&(link_inode->rw_lock));
+    pthread_read_lock(link_inode);
     inode_type i_type = link_inode->i_node_type;
-    pthread_rwlock_unlock(&(link_inode->rw_lock));
+    pthread_wr_unlock(link_inode);
     ALWAYS_ASSERT(clear_dir_entry(root_inode, target+1) == 0, "tfs_unlink : couldn clear dir entry");
     switch (i_type){
         case T_FILE: {
             if (link_inode->hard_link != 1){
+                pthread_write_lock(link_inode);
                 link_inode->hard_link--;
+                pthread_wr_unlock(link_inode);
             }
             else if (link_inode->hard_link == 1 && link_inode->open_inode == 0) {
                 inode_delete(i_number);
