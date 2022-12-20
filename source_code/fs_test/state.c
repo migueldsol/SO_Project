@@ -33,6 +33,7 @@ static allocation_state_t *free_open_file_entries;
 
 //  mutex
 static pthread_mutex_t *fs_mutex;
+static pthread_cond_t *fs_inode_cond;
 
 // Convenience macros
 #define INODE_TABLE_SIZE (fs_params.max_inode_count)
@@ -87,28 +88,7 @@ static void insert_delay(void) {
         touch_all_memory();
     }
 }
-void pthread_write_lock(inode_t *inode){
-    ALWAYS_ASSERT(pthread_rwlock_wrlock(&(inode->rw_lock)) == 0
-    ,"pthread_write_lock: failed to lock");
-}
-void pthread_wr_unlock(inode_t *inode){
-    ALWAYS_ASSERT(pthread_rwlock_unlock(&(inode->rw_lock)) == 0
-    ,"pthread_write_unlock: failed to unlock");
-}
-void pthread_read_lock(inode_t *inode){
-    ALWAYS_ASSERT(pthread_rwlock_rdlock(&(inode->rw_lock)) == 0
-    ,"pthread_read_lock: failed to lock");
-}
-void pthread_m_lock(int type){
-    pthread_mutex_t *mutex = get_mutex_table();
-    ALWAYS_ASSERT(pthread_mutex_lock(&mutex[type]) == 0
-    ,"pthread_mutex_lock: failed to lock");
-}
-void pthread_m_unlock(int type){
-    pthread_mutex_t *mutex = get_mutex_table();
-    ALWAYS_ASSERT(pthread_mutex_unlock(&mutex[type]) == 0
-    ,"pthread_mutex_unlock: failed to unlock");
-}
+
 /**
  * Initialize FS state.
  *
@@ -130,6 +110,7 @@ int state_init(tfs_params params) {
 
     inode_table = malloc(INODE_TABLE_SIZE * sizeof(inode_t));
     freeinode_ts = malloc(INODE_TABLE_SIZE * sizeof(allocation_state_t));
+    fs_inode_cond = malloc(INODE_TABLE_SIZE * sizeof(pthread_cond_t));
 
     fs_data = malloc(DATA_BLOCKS * BLOCK_SIZE);
     free_blocks = malloc(DATA_BLOCKS * sizeof(allocation_state_t));
@@ -153,6 +134,7 @@ int state_init(tfs_params params) {
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         freeinode_ts[i] = FREE;
         pthread_rwlock_init(&(inode_table[i].rw_lock), NULL);
+        pthread_cond_init(&(fs_inode_cond[i]), NULL);
     }
 
     for (size_t i = 0; i < DATA_BLOCKS; i++) {
@@ -185,9 +167,11 @@ int state_destroy(void) {
 
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
             pthread_rwlock_destroy(&(inode_table[i].rw_lock));
+            pthread_cond_destroy(&(fs_inode_cond[i]));
     }
 
     free(fs_mutex);
+    free(fs_inode_cond);
     
 
     inode_table = NULL;
@@ -197,6 +181,7 @@ int state_destroy(void) {
     open_file_table = NULL;
     free_open_file_entries = NULL;
     fs_mutex = NULL;
+    fs_inode_cond = NULL;
 
     return 0;
 }
@@ -211,8 +196,7 @@ int state_destroy(void) {
  *   - No free slots in inode table.
  */
 static int inode_alloc(void) {
-    //SOL esta bem
-    pthread_m_lock(FREEINODE_MUTEX_ENTRIE);
+    pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
     for (size_t inumber = 0; inumber < INODE_TABLE_SIZE; inumber++) {
         if ((inumber * sizeof(allocation_state_t) % BLOCK_SIZE) == 0) {
             insert_delay(); // simulate storage access delay (to freeinode_ts)
@@ -223,12 +207,12 @@ static int inode_alloc(void) {
             //  Found a free entry, so takes it for the new inode
             freeinode_ts[inumber] = TAKEN;
 
-            pthread_m_unlock(FREEINODE_MUTEX_ENTRIE);
+            pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
             return (int)inumber;
         }
     }
     
-    pthread_m_unlock(FREEINODE_MUTEX_ENTRIE);
+    pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
     // no free inodes
     return -1;
 }
@@ -251,14 +235,12 @@ static int inode_alloc(void) {
  *   - (if creating a directory) No free data blocks.
  */
 int inode_create(inode_type i_type) {
-    //SOL esta bem
     int inumber = inode_alloc();
     if (inumber == -1) {
         return -1; // no free slots in inode table
     }
     inode_t *inode = &inode_table[inumber];
     insert_delay(); // simulate storage access delay (to inode)
-    pthread_write_lock(inode);
 
     inode->i_node_type = i_type;
     switch (i_type) {
@@ -272,7 +254,6 @@ int inode_create(inode_type i_type) {
             inode->i_data_block = -1;
             inode->hard_link = -1;
             inode->open_inode = 0;
-            pthread_wr_unlock(inode); //FIXME pode ser que nao e suposto estar aqui
             // run regular deletion process
             inode_delete(inumber);
             return -1;
@@ -284,10 +265,11 @@ int inode_create(inode_type i_type) {
         ALWAYS_ASSERT(dir_entry != NULL,
                       "inode_create: data block freed while in use");
 
+        pthread_mutex_lock(&(fs_mutex[DIR_MUTEX_ENTRIE]));
         for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
             dir_entry[i].d_inumber = -1;
         }
-        pthread_wr_unlock(inode); //FIXME pode ser que nao e suposto estar aqui
+        pthread_mutex_unlock(&(fs_mutex[DIR_MUTEX_ENTRIE]));
     } break;
     case T_FILE:
         // In case of a new file, simply sets its size to 0
@@ -295,14 +277,13 @@ int inode_create(inode_type i_type) {
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = 0;
-        pthread_wr_unlock(inode); //FIXME pode ser que nao e suposto estar aqui
+        pthread_cond_init(&(inode_table[inumber].condDelete), NULL);
         break;
     case T_SYMLINK:
         inode_table[inumber].i_size = 0;
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = -1;
-        pthread_wr_unlock(inode); //FIXME pode ser que nao e suposto estar aqui
         break;
     default:
         PANIC("inode_create: unknown file type");
@@ -324,20 +305,23 @@ void inode_delete(int inumber) {
     ALWAYS_ASSERT(valid_inumber(inumber), "inode_delete: invalid inumber");
 
     //TODO definir ordem de locks
-    pthread_m_lock(FREEINODE_MUTEX_ENTRIE);
+    pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
     ALWAYS_ASSERT(freeinode_ts[inumber] == TAKEN,
                   "inode_delete: inode already freed");
-    
-    freeinode_ts[inumber] = FREE;
-    pthread_m_unlock(FREEINODE_MUTEX_ENTRIE);
+    pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
 
     inode_t *inode = inode_get(inumber);
-    pthread_write_lock(inode);
+    pthread_rwlock_rdlock(&(inode->rw_lock));
+    pthread_cond_destroy(&(inode->condDelete));
 
     if (inode_table[inumber].i_size > 0) {
         data_block_free(inode_table[inumber].i_data_block);
     }
-    pthread_wr_unlock(inode);
+    pthread_rwlock_unlock(&(inode->rw_lock));
+
+    pthread_mutex_lock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
+    freeinode_ts[inumber] = FREE;
+    pthread_mutex_unlock(&(fs_mutex[FREEINODE_MUTEX_ENTRIE]));
 }
 
 /**
@@ -347,16 +331,11 @@ void inode_delete(int inumber) {
  *   - inumber: inode's number
  *
  * Returns pointer to inode.
- *
- ******************************
- *PRECISAMOS DAR LOCK AO INODE
- ******************************
  */
 inode_t *inode_get(int inumber) {
     ALWAYS_ASSERT(valid_inumber(inumber), "inode_get: invalid inumber");
 
     insert_delay(); // simulate storage access delay to inode
-
     return &inode_table[inumber];
 }
 
@@ -374,10 +353,10 @@ inode_t *inode_get(int inumber) {
  *   - Directory does not contain an entry for sub_name.
  */
 int clear_dir_entry(inode_t *inode, char const *sub_name) {
+    pthread_rwlock_wrlock(&(inode->rw_lock));
     insert_delay();
-    pthread_write_lock(inode);
     if (inode->i_node_type != T_DIRECTORY) {
-        pthread_wr_unlock(inode);
+        pthread_rwlock_unlock(&(inode->rw_lock));
         return -1; // not a directory
     }
 
@@ -390,11 +369,11 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
         if (!strcmp(dir_entry[i].d_name, sub_name)) {
             dir_entry[i].d_inumber = -1;
             memset(dir_entry[i].d_name, 0, MAX_FILE_NAME);
-            pthread_wr_unlock(inode);
+            pthread_rwlock_unlock(&(inode->rw_lock));
             return 0;
         }
     }
-    pthread_wr_unlock(inode);
+    pthread_rwlock_unlock(&(inode->rw_lock));
     return -1; // sub_name not found
 }
 
@@ -414,15 +393,15 @@ int clear_dir_entry(inode_t *inode, char const *sub_name) {
  *   - Directory is already full of entries.
  */
 int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
-    pthread_write_lock(inode);
+    pthread_rwlock_wrlock(&(inode->rw_lock));
     if (strlen(sub_name) == 0 || strlen(sub_name) > MAX_FILE_NAME - 1) {
-        pthread_wr_unlock(inode);
+        pthread_rwlock_unlock(&(inode->rw_lock));
         return -1; // invalid sub_name
     }
 
     insert_delay(); // simulate storage access delay to inode with inumber
     if (inode->i_node_type != T_DIRECTORY) {
-        pthread_wr_unlock(inode);
+        pthread_rwlock_unlock(&(inode->rw_lock));
         return -1; // not a directory
     }
 
@@ -437,11 +416,11 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
             dir_entry[i].d_inumber = sub_inumber;
             strncpy(dir_entry[i].d_name, sub_name, MAX_FILE_NAME - 1);
             dir_entry[i].d_name[MAX_FILE_NAME - 1] = '\0';
-            pthread_wr_unlock(inode);
+            pthread_rwlock_unlock(&(inode->rw_lock));
             return 0;
         }
     }
-    pthread_wr_unlock(inode);
+    pthread_rwlock_unlock(&(inode->rw_lock));
     return -1; // no space for entry
 }
 
@@ -462,13 +441,11 @@ int find_in_dir(inode_t const *inode, char const *sub_name) {
     ALWAYS_ASSERT(inode != NULL, "find_in_dir: inode must be non-NULL");
     ALWAYS_ASSERT(sub_name != NULL, "find_in_dir: sub_name must be non-NULL");
 
-    //SOL decidir se usamos tabela em vez de colocar na estrutura
-    //  porque aqui precisamos de aceder ao inode mas nao da
-
     insert_delay(); // simulate storage access delay to inode with inumber
     if (inode->i_node_type != T_DIRECTORY) {
         return -1; // not a directory
     }
+
     // Locates the block containing the entries of the directory
     dir_entry_t *dir_entry = (dir_entry_t *)data_block_get(inode->i_data_block);
     ALWAYS_ASSERT(dir_entry != NULL,
@@ -500,13 +477,12 @@ int data_block_alloc(void) {
         if (i * sizeof(allocation_state_t) % BLOCK_SIZE == 0) {
             insert_delay(); // simulate storage access delay to free_blocks
         }
-        pthread_m_lock(FREE_BLOCK_MUTEX_ENTRIE);
+
         if (free_blocks[i] == FREE) {
             free_blocks[i] = TAKEN;
-            pthread_m_unlock(FREE_BLOCK_MUTEX_ENTRIE);
+
             return (int)i;
         }
-        pthread_m_unlock(FREE_BLOCK_MUTEX_ENTRIE);
     }
     return -1;
 }
@@ -522,9 +498,8 @@ void data_block_free(int block_number) {
                   "data_block_free: invalid block number");
 
     insert_delay(); // simulate storage access delay to free_blocks
-    pthread_m_lock(FREE_BLOCK_MUTEX_ENTRIE);
+
     free_blocks[block_number] = FREE;
-    pthread_m_unlock(FREE_BLOCK_MUTEX_ENTRIE);
 }
 
 /**
@@ -534,10 +509,6 @@ void data_block_free(int block_number) {
  *   - block_number: the block number/index
  *
  * Returns a pointer to the first byte of the block.
- *
- ******************************
- * PRECISAMOS DAR LOCK AO INODE
- *******************************
  */
 void *data_block_get(int block_number) {
     ALWAYS_ASSERT(valid_block_number(block_number),
@@ -561,21 +532,16 @@ void *data_block_get(int block_number) {
  */
 int add_to_open_file_table(int inumber, size_t offset) {
     for (int i = 0; i < MAX_OPEN_FILES; i++) {
-        pthread_m_lock(OPEN_FILE_MUTEX_ENTRIE);
+        pthread_mutex_lock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
         if (free_open_file_entries[i] == FREE) {
             free_open_file_entries[i] = TAKEN;
 
             open_file_table[i].of_inumber = inumber;
             open_file_table[i].of_offset = offset;
-            pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
-
-            inode_t *new_inode = inode_get(inumber);
-            pthread_write_lock(new_inode);
-            new_inode->open_inode++;
-            pthread_wr_unlock(new_inode);
+            pthread_mutex_unlock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
             return i;
         }
-        pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
+        pthread_mutex_unlock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
     }
     return -1;
 }
@@ -587,26 +553,17 @@ int add_to_open_file_table(int inumber, size_t offset) {
  *   - fhandle: file handle to free/close
  */
 void remove_from_open_file_table(int fhandle) {
-    pthread_m_lock(OPEN_FILE_MUTEX_ENTRIE);
+    pthread_mutex_lock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
     ALWAYS_ASSERT(valid_file_handle(fhandle),
                   "remove_from_open_file_table: file handle must be valid");
 
     ALWAYS_ASSERT(free_open_file_entries[fhandle] == TAKEN,
                   "remove_from_open_file_table: file handle must be taken");
 
-    open_file_entry_t *file = get_open_file_entry(fhandle);
-    int inumber = file->of_inumber;
-    inode_t *inode = inode_get(inumber);
-    
     free_open_file_entries[fhandle] = FREE;
-    pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
 
-
-    pthread_write_lock(inode);
-
-    inode->open_inode--;
     
-    pthread_wr_unlock(inode);
+    pthread_mutex_unlock(&(fs_mutex[OPEN_FILE_MUTEX_ENTRIE]));
 }
 
 /**
@@ -617,10 +574,6 @@ void remove_from_open_file_table(int fhandle) {
  *
  * Returns pointer to the entry, or NULL if the fhandle is invalid/closed/never
  * opened.
- *
- ************************************
- * TEMOS QUE DAR LOCK NO OPEN_FILE
- ************************************
  */
 open_file_entry_t *get_open_file_entry(int fhandle) {
     if (!valid_file_handle(fhandle)) {

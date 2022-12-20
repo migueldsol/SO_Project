@@ -2,7 +2,6 @@
 #define OPERATIONS_H
 
 #include "config.h"
-#include "state.h"
 #include <sys/types.h>
 
 /**
@@ -137,10 +136,4 @@ int tfs_unlink(char const *target);
  * Returns 0 if successful, -1 otherwise.
  */
 int tfs_copy_from_external_fs(char const *source_path, char const *dest_path);
-
-void pthread_m_lock(int type);
-void pthread_m_unlock(int type);
-void pthread_write_lock(inode_t *inode);
-void pthread_wr_unlock(inode_t *inode);
-void pthread_read_lock(inode_t *inode);
 #endif // OPERATIONS_H

@@ -70,5 +70,10 @@ void remove_from_open_file_table(int fhandle);
 open_file_entry_t *get_open_file_entry(int fhandle);
 
 pthread_mutex_t *get_mutex_table();
+void pthread_m_lock(int type);
+void pthread_m_unlock(int type);
+void pthread_write_lock(inode_t *inode);
+void pthread_wr_unlock(inode_t *inode);
+void pthread_read_lock(inode_t *inode);
 
 #endif // STATE_H
