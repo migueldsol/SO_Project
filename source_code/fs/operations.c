@@ -3,6 +3,7 @@
 #include "state.h"
 #include <bits/pthreadtypes.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -102,9 +103,10 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             ALWAYS_ASSERT(inode != NULL,
                     "tfs_open: directory files must have an inode");
             char *buffer = data_block_get(inode->i_data_block);
-            char *path_name = malloc(sizeof(char)*inode->i_size);
-            memcpy(path_name, buffer, inode->i_size);
-            pthread_wr_unlock(inode);
+
+            char *path_name = malloc(sizeof(char) * inode->i_size);
+            memcpy(path_name, buffer, sizeof(char)*inode->i_size);
+            pthread_rwlock_unlock(&(inode->rw_lock));
             //FIXME help
 
             // get the inum of the file
