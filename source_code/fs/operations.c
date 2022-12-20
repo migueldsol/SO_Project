@@ -82,6 +82,8 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
     //TODO condições dos locks seguidos
     // Checks if the path name is valid
     if (!valid_pathname(name)) {
+        printf("%s\n",name);
+        printf("invalid path name\n");
         return -1;
     }
 
@@ -115,6 +117,8 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             pthread_wr_unlock(root_dir_inode);
 
             if (inum < 0){
+                printf("%s\n",name);
+                printf("ficheiro do sym link ja nao existe\n");
                 return -1;
             }
             // set the inode to be the inode of the file 
@@ -142,18 +146,24 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
         // Create inode
         inum = inode_create(T_FILE);
         if (inum == -1) {
+            printf("%s\n",name);
+            printf("nao ha espaço para inum\n");
             return -1; // no space in inode table
         }
 
         // Add entry in the root directory
         if (add_dir_entry(root_dir_inode, name + 1, inum) == -1) {
             inode_delete(inum);
+            printf("%s\n",name);
+            printf("nao ha espaço na diretoria\n");
             return -1; // no space in directory
         }
         
 
         offset = 0;
     } else {
+        printf("%s\n",name);
+        printf("nao encontrei o inode\n");
         return -1;
     }
     // Finally, add entry to the open file table and return the corresponding
