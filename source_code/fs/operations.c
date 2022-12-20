@@ -173,16 +173,20 @@ int tfs_sym_link(char const *target, char const *link_name) {
     if (soft_link == NULL){
         return -1;
     }
+    pthread_mutex_t *fs_mutex = get_mutex_table();
     pthread_rwlock_wrlock(&(soft_link->rw_lock));
+    pthread_mutex_lock(&fs_mutex[INODE_MUTEX_ENTRIE]);
     soft_link->i_size = strlen(target);
     soft_link->i_data_block = data_block_alloc();
     if (soft_link->i_data_block == -1){
+        pthread_mutex_unlock(&fs_mutex[INODE_MUTEX_ENTRIE]);
         pthread_rwlock_unlock(&(soft_link->rw_lock));
         return -1;
     }
     void *write = data_block_get( soft_link->i_data_block);
     memcpy(write, target, strlen(target));
     soft_link->hard_link = -1;
+    pthread_mutex_unlock(&fs_mutex[INODE_MUTEX_ENTRIE]);
     pthread_rwlock_unlock(&(soft_link->rw_lock));
     return 0;
 }
@@ -317,7 +321,6 @@ int tfs_unlink(char const *target) {
     pthread_rwlock_rdlock(&(link_inode->rw_lock));
     inode_type i_type = link_inode->i_node_type;
     pthread_rwlock_unlock(&(link_inode->rw_lock));
-
     ALWAYS_ASSERT(clear_dir_entry(root_inode, target+1) == 0, "tfs_unlink : couldn clear dir entry");
     switch (i_type){
         case T_FILE: {
