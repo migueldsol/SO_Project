@@ -358,16 +358,26 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
     location = tfs_open(dest_path,TFS_O_CREAT | TFS_O_TRUNC);
     if(location == -1 || source == NULL){return -1;}
     char buffer[128];
-    int counter = 0;
-    while(counter < 7){
-        memset(buffer,0,sizeof(buffer));
-        size_t words = fread(buffer,sizeof(char),sizeof(buffer),source);
+    size_t block_size = state_block_size();
+    size_t  counter = 0;
+    size_t to_write = 0;
+    memset(buffer,0,sizeof(buffer));
+    size_t words = fread(buffer,sizeof(char),sizeof(buffer),source);
+    while(words != 0 && counter < block_size){
         if (ferror(source) != 0){
             close_files(source,location);
             return -1;
         }
-        tfs_write(location,buffer,words);
-        counter++;
+        if (counter + words > block_size) {
+            to_write = block_size - counter;
+        }
+        else {
+            to_write = words;
+        }
+        tfs_write(location,buffer,to_write);
+        counter += to_write;
+        memset(buffer,0,sizeof(buffer));
+        words = fread(buffer,sizeof(char),sizeof(buffer),source);
     }
     close_files(source,location);
     return 0;
