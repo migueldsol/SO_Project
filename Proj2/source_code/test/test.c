@@ -44,7 +44,7 @@ int main() {
 
     memcpy(file_name, buffer+4, 256);
     memcpy(box, buffer+260, 32);
-
+    
     int pub_fifo = open(file_name, O_RDONLY);
     assert(pub_fifo != -1);
 

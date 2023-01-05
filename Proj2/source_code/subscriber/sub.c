@@ -19,6 +19,9 @@
 //QUESTIONS o que acontece quando o maximo de sessões são excedidas?
 //QUESTIONS vamos ter max_sessions threads a tratar de clientes?
 
+//QUESTIONS o que acontece qd temos varios processos a escrever no mesmo pipe?
+//QUESTIONS como dizer a thread que esta a tratar do cliente que este se vai desligar?
+
 int main(int argc, char **argv) {
 
     assert(argc == 4);

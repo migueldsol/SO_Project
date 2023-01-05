@@ -67,16 +67,14 @@ int main(int argc, char **argv) {
 
     char *server_command = malloc(MAX_SERVER_MESSAGE);
     
+    //QUESTIONS e so \n fazemos oq?
     while(fgets(buffer, MAX_MESSAGE, stdin) != NULL){
         buffer = strtok(buffer, "\n");
-        char *new_buffer = strtok(buffer,"\0");
-
-        if (!new_buffer){
+        size_t length = strlen(buffer);
+        if (!length){
             break;
         }
 
-        size_t length = strlen(buffer);
-        buffer[length] = '\0';
         printf("%s\n", buffer);
 
         //setting up command to send to server
@@ -86,7 +84,7 @@ int main(int argc, char **argv) {
         sprintf(server_command, "%04d", PUBLISHER_MESSAGE_CODE);
         memcpy(server_command+4, buffer, MAX_MESSAGE);
 
-        write(client_FIFO, buffer, MAX_SERVER_MESSAGE);
+        write(client_FIFO, server_command, MAX_SERVER_MESSAGE);
         //FIXME just for testing
     }
 
