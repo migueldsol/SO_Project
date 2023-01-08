@@ -16,15 +16,8 @@
 #define MAX_SERVER_MESSAGE (1028)
 #define SUBSCRIBER_CODE (1)
 
-//QUESTIONS como dizer ao cliente que a sua ligação foi aceite?  fechar o pipe no open
-//QUESTIONS o que acontece quando o maximo de sessões são excedidas?
-//QUESTIONS vamos ter max_sessions threads a tratar de clientes?
-
-//QUESTIONS o que acontece qd temos varios processos a escrever no mesmo pipe?
-//QUESTIONS como dizer a thread que esta a tratar do cliente que este se vai desligar?
-
 int main(int argc, char **argv) {
-
+    //FIXME verificar tamanho dos args
     assert(argc == 4);
 
     //create FIFO
@@ -94,6 +87,10 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
+
+    free(register_message);
+    free(buffer);
+    free(message);
 
     return 0;
 }

@@ -25,12 +25,8 @@
 #define REMOVE_SEND_CODE (5)
 #define LIST_SEND_CODE (7)
 
-//QUESTIONS como dizer ao cliente que a sua ligação foi aceite?  fechar o pipe no open
-//QUESTIONS o que acontece quando o maximo de sessões são excedidas?
-//QUESTIONS vamos ter max_sessions threads a tratar de clientes?
+    //FIXME verificar tamanho dos args
 
-//QUESTIONS o que acontece qd temos varios processos a escrever no mesmo pipe?
-//QUESTIONS como dizer a thread que esta a tratar do cliente que este se vai desligar?
 
 int main(int argc, char **argv) {
 
