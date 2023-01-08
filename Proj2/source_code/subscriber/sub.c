@@ -1,6 +1,7 @@
-//#include "logging.h"
+#include "logging.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -15,7 +16,7 @@
 #define MAX_SERVER_MESSAGE (1028)
 #define SUBSCRIBER_CODE (1)
 
-//QUESTIONS como dizer ao cliente que a sua ligação foi aceite?
+//QUESTIONS como dizer ao cliente que a sua ligação foi aceite?  fechar o pipe no open
 //QUESTIONS o que acontece quando o maximo de sessões são excedidas?
 //QUESTIONS vamos ter max_sessions threads a tratar de clientes?
 
@@ -48,7 +49,8 @@ int main(int argc, char **argv) {
     }
     
     //create message to send to server
-    // message format: [ code = 1 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
+    // message format: [ code = 1 (uint8_t)] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
+
     char *register_message = malloc(MAX_SERVER_REGISTER);
     memset(register_message, 0, MAX_SERVER_REGISTER);
     sprintf(register_message, "%04d", SUBSCRIBER_CODE);
@@ -71,7 +73,6 @@ int main(int argc, char **argv) {
 
     char *message = malloc(MAX_MESSAGE);
     
-    int code;
 
     //reads message
     //  message format: [ code = 10 ] | [ message (char[1024]) ]
