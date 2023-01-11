@@ -3,8 +3,6 @@
 #include "betterassert.h"
 #include "operations.h"
 #include "mbroker.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -20,30 +18,31 @@
 #define MAX_PUB_MESSAGE (1024)
 #define MAX_SUB_RESPONSE (1028)
 #define OP_CODE_SUB_RESPONSE (10)
-
     //FIXME verificar tamanho dos args
 
 void *worker_thread(void * arg){
     m_broker_values *important_values = (m_broker_values*) arg;
 
     for(void *elem = pcq_dequeue(important_values->queue);1;elem = pcq_dequeue(important_values->queue)){
-        int *code;
-        memcpy(code, elem, sizeof(int) * 4);
+        uint8_t code;
+        memcpy(&code, elem, sizeof(int8_t));
+        char *client_pipe_name, *box_name;
+        client_pipe_name = malloc(MAX_CLIENT_PIPE);
+        box_name = malloc(MAX_BOX_NAME);
+        memset(client_pipe_name, 0, MAX_CLIENT_PIPE);
+        memset(box_name, 0, MAX_BOX_NAME);
+        memcpy(client_pipe_name, elem + 4, MAX_CLIENT_PIPE);
+        memcpy(box_name, elem + 4 + MAX_CLIENT_PIPE, MAX_BOX_NAME);
+        int client_fifo;
 
-        switch (*code){
-            char *client_pipe_name, *box_name;
-            memcpy(client_pipe_name, elem + 4, MAX_CLIENT_PIPE);
-            memcpy(box_name, elem + 4 + MAX_CLIENT_PIPE, MAX_BOX_NAME);
-
+        switch (code){
             case 1:
-
-
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
 
-                for (int i = 0; i < important_values->box_size; i++){
+                for (int i = 0; i < important_values->num_box; i++){
                     int cmp_value = strcmp(important_values->boxes[i].name, box_name);
-                    if ((cmp_value == 0 && important_values->boxes->number_publishers == 1) || i == important_values->box_size - 1){
-                        int client_fifo = open(client_pipe_name, O_RDONLY);
+                    if ((cmp_value == 0 && important_values->boxes->number_publishers == 1) || i == important_values->num_box - 1){
+                        client_fifo = open(client_pipe_name, O_RDONLY);
                         ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
                         ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                         //pthread_rwlock_unlock(&(important_values->boxes_lock));
@@ -55,7 +54,7 @@ void *worker_thread(void * arg){
 
                         //FIXME if box nao foi apagada 
 
-                        int client_fifo = open(client_pipe_name, O_RDONLY);
+                        client_fifo = open(client_pipe_name, O_RDONLY);
                         ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
 
                         char *pub_response = malloc(sizeof(char) * MAX_PUB_RESPONSE);
@@ -63,9 +62,11 @@ void *worker_thread(void * arg){
                         int open_box = tfs_open(box_name, TFS_O_APPEND);
                         while(read(client_fifo, pub_response, MAX_PUB_RESPONSE) != 0){
                             //FIXMEif box nao foi apagada
-                            char * message;
+                            char * message = malloc(sizeof(char) * MAX_PUB_MESSAGE);
+                            memset(message, 0, MAX_PUB_MESSAGE);
                             memcpy(message, pub_response + 4,MAX_PUB_MESSAGE);
-                            ALWAYS_ASSERT(tfs_write(open_box, message, MAX_PUB_MESSAGE) != -1, "mbrocker: Couldn't write in box");
+                            ssize_t size = tfs_write(open_box, message, MAX_PUB_MESSAGE);
+                            important_values->boxes[i].box_size += (uint64_t)size;
                             memset(message, 0, MAX_PUB_MESSAGE);
                             memset(pub_response, 0, MAX_PUB_RESPONSE);
                         }
@@ -77,19 +78,20 @@ void *worker_thread(void * arg){
             case 2:
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
 
-                for (int i = 0; i < important_values->box_size; i++){
+                for (int i = 0; i < important_values->num_box; i++){
                     int cmp_value = strcmp(important_values->boxes[i].name, box_name);
                     if (cmp_value == 0){
 
                         //FIXME if box nao foi apagada 
 
-                        int client_fifo = open(client_pipe_name, O_WRONLY);
+                        client_fifo = open(client_pipe_name, O_WRONLY);
                         ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
                         
                         int open_box = tfs_open(box_name, 0);
                         char *message = malloc(sizeof(char) * MAX_PUB_MESSAGE);
                         char *buffer = malloc(sizeof(char) * MAX_SUB_RESPONSE);
                         while(true){
+            
                             //FIXME if box nao foi apagada
                             //FIXME esperar que o pub escreva (com cond_wait)
                             memset(message, 0, MAX_PUB_MESSAGE);
@@ -102,8 +104,8 @@ void *worker_thread(void * arg){
                         ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
                         ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
                     }
-                    else if (i == important_values->box_size - 1){
-                        int client_fifo = open(client_pipe_name, O_WRONLY);
+                    else if (i == important_values->num_box - 1){
+                        client_fifo = open(client_pipe_name, O_WRONLY);
                         ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
                         ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                         break;
@@ -111,15 +113,14 @@ void *worker_thread(void * arg){
                 }
                 break;
             case 3:
-
-                int client_fifo = open(client_pipe_name, O_WRONLY);
-                int exit = 0;
-                for (int i = 0; i < important_values->box_size; i++){
+                int leave = 0;
+                client_fifo = open(client_pipe_name, O_WRONLY);
+                for (int i = 0; i < important_values->num_box; i++){
                     if (strcmp(important_values->boxes[i].name, box_name) == 0){
-                        exit = 1;
+                        leave = 1;
                     }
                 }
-                if (exit == 1){
+                if (leave == 1){
                     //FIXME ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                     break;
                 }
@@ -130,17 +131,43 @@ void *worker_thread(void * arg){
                 }
         
                 ALWAYS_ASSERT(tfs_close(new_box) != -1, "worker thread manager create error: couldn't close created box");
-
+                break;
             case 5:
-                int client_fifo = open(client_pipe_name, O_WRONLY);
+                client_fifo = open(client_pipe_name, O_WRONLY);
 
-                for (int i = 0; i < important_values->box_size; i++){
+                for (int i = 0; i < important_values->num_box; i++){
                     if (strcmp(important_values->boxes[i].name, box_name) == 0 && code == 3){
                         
                     }
                 }
+                break;
+            case 7://list boxes
+                client_fifo = open(client_pipe_name, O_WRONLY);
+                uint8_t code_8 = 8;
+                if(client_fifo == -1){
+                    printf("mbroker: Couldn't open the client's fifo");
+                    break;
+                }
+                for (int i = 0; i < important_values->num_box; i++){
+                    void *message = malloc(sizeof(char) * MAX_PUB_MESSAGE);
+                    memset(message, 0, MAX_PUB_MESSAGE);
+                    uint8_t last = 0;
+                    if(i == important_values->num_box - 1){
+                        last = 1;
+                    }
+                    //message with code=8(uint8_t)|last(uint8_t)|box_name(char[32])|box_size(uint64_t)|n_publishers(uint_64)|n_subs(uint64_t)|
+                    memcpy(message, &code_8, sizeof(uint8_t));
+                    memcpy(message, &last, sizeof(uint8_t));
+                    memcpy(message, important_values->boxes[i].name, sizeof(char) * 32);
+                    memcpy(message, &(important_values->boxes[i].box_size), sizeof(uint64_t));
+                    memcpy(message, &(important_values->boxes[i].number_publishers), sizeof(uint64_t));
+                    memcpy(message, &(important_values->boxes[i].number_subscribers), sizeof(uint64_t));
+                    write(client_fifo, message, MAX_PUB_MESSAGE);
 
-            case 7:
+                }
+                break;
+            default:
+                break;
 
         }
     }
@@ -175,8 +202,8 @@ int main(int argc, char **argv) {
 
     m_broker_values *important_values = malloc(sizeof(m_broker_values));
     
-    box *boxes = malloc(default_params.max_inode_count * sizeof(box)); 
-    important_values->box_size = default_params.max_inode_count;
+    box *boxes = malloc(default_params.max_inode_count * sizeof(box));
+    important_values->num_box = 0;
     important_values->queue = queue;
     important_values->boxes = boxes; 
     pthread_rwlock_init(&(important_values->boxes_lock), NULL);
@@ -194,11 +221,22 @@ int main(int argc, char **argv) {
 
     //this makes the mbroker never stop blocking on a read since there is someone already connected
     //  to the pipe as a writer
-    int afk_server = open(argv[1], O_WRONLY);
+    int afk_server_open = open(argv[1], O_WRONLY);
 
-    int server = open(argv[1], O_RDONLY);
+    assert(afk_server_open != 0);
 
-    assert(server != 0);
+    int server_open = open(argv[1], O_RDONLY);
 
+    assert(server_open != 0);
+
+    int afk_server_close = close(afk_server_open);
+
+    assert(afk_server_close != 0);
+
+    int server_close = close(server_open);
+
+    assert(server_close != 0);
+    
     return 0;
+
 }
