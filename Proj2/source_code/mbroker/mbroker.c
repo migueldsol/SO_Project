@@ -194,7 +194,9 @@ int main(int argc, char **argv) {
 
     ALWAYS_ASSERT(queue != NULL, "No memory for queue");
 
-    unsigned long max_sessions = strtoull(argv[3], NULL, 10);
+    size_t max_sessions;
+
+    sscanf(argv[2], "%zu", &max_sessions);
 
     ALWAYS_ASSERT(pcq_create(queue, (size_t) max_sessions) == 0, "pqc_create fail");
 
@@ -215,28 +217,31 @@ int main(int argc, char **argv) {
     }
 
     if (mkfifo(argv[1], 0666) != 0){
-        printf("erro\n");
-        exit(EXIT_FAILURE);
+        PANIC("error in creating the server fifi");
     }
 
     //this makes the mbroker never stop blocking on a read since there is someone already connected
     //  to the pipe as a writer
-    int afk_server_open = open(argv[1], O_WRONLY);
 
-    assert(afk_server_open != 0);
 
-    int server_open = open(argv[1], O_RDONLY);
+    assert(server != 0);
 
-    assert(server_open != 0);
+    char *buffer = malloc(MAX_SERVER_REGISTER);
+    ssize_t words = 0;
+    while(true){
+        memset(buffer, 0, MAX_SERVER_REGISTER);
+        words = read(server, buffer, MAX_SERVER_REGISTER);
+        if (words == -1){
+            PANIC("error reading from register_pipe");
+        }
+        else if (words == 0){
+            PANIC("error, got an EOF");
+        } 
+        printf("%4s%256s%32s\n",buffer, buffer+4, buffer+260);
+    }
 
-    int afk_server_close = close(afk_server_open);
-
-    assert(afk_server_close != 0);
-
-    int server_close = close(server_open);
-
-    assert(server_close != 0);
-    
+    close(afk_server);
+    close(server);
     return 0;
 
 }
