@@ -20,9 +20,11 @@
 #define MAX_PUB_MESSAGE (1024)
 #define MAX_SUB_RESPONSE (1028)
 #define OP_CODE_SUB_RESPONSE (10)
+#define MAX_SERVER_REGISTER (292)
 
     //FIXME verificar tamanho dos args
 
+/*
 void *worker_thread(void * arg){
     m_broker_values *important_values = (m_broker_values*) arg;
 
@@ -128,8 +130,9 @@ void *worker_thread(void * arg){
                 if (new_box == -1){
                     break;
                 }
-        
                 ALWAYS_ASSERT(tfs_close(new_box) != -1, "worker thread manager create error: couldn't close created box");
+
+                break;                
 
             case 5:
                 int client_fifo = open(client_pipe_name, O_WRONLY);
@@ -139,22 +142,21 @@ void *worker_thread(void * arg){
                         
                     }
                 }
-
+                break;
             case 7:
-
+                break;
         }
     }
     return 0;
 }
+*/
 
 int main(int argc, char **argv) {
 
     assert(argc == 3);
 
     if (unlink(argv[1]) != 0 && errno != ENOENT) {
-        fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[1],
-                strerror(errno));
-        exit(EXIT_FAILURE);
+        PANIC("Unlink failed");
     }
 
     //initialize tfs and boxes
@@ -167,38 +169,56 @@ int main(int argc, char **argv) {
 
     ALWAYS_ASSERT(queue != NULL, "No memory for queue");
 
-    unsigned long max_sessions = strtoull(argv[3], NULL, 10);
+    size_t max_sessions;
+
+    sscanf(argv[2], "%zu", &max_sessions);
 
     ALWAYS_ASSERT(pcq_create(queue, (size_t) max_sessions) == 0, "pqc_create fail");
 
     //initialize threads
 
     m_broker_values *important_values = malloc(sizeof(m_broker_values));
-    
     box *boxes = malloc(default_params.max_inode_count * sizeof(box)); 
-    important_values->box_size = default_params.max_inode_count;
+    //important_values->box_size = default_params.max_inode_count;
     important_values->queue = queue;
     important_values->boxes = boxes; 
     pthread_rwlock_init(&(important_values->boxes_lock), NULL);
 
-    pthread_t *threads = malloc(max_sessions * sizeof(pthread_t));
+    //pthread_t *threads = malloc(max_sessions * sizeof(pthread_t));
 
+    /*
     for (int i = 0; i < max_sessions; i++){
         ALWAYS_ASSERT(pthread_create(&threads[i],NULL, &worker_thread, (void*)important_values) == 0, "Error creating threads");
     }
+    */
 
     if (mkfifo(argv[1], 0666) != 0){
-        printf("erro\n");
-        exit(EXIT_FAILURE);
+        PANIC("error in creating the server fifi");
     }
 
     //this makes the mbroker never stop blocking on a read since there is someone already connected
     //  to the pipe as a writer
-    int afk_server = open(argv[1], O_WRONLY);
-
     int server = open(argv[1], O_RDONLY);
+
+    int afk_server = open(argv[1], O_WRONLY);
 
     assert(server != 0);
 
+    char *buffer = malloc(MAX_SERVER_REGISTER);
+    ssize_t words = 0;
+    while(true){
+        memset(buffer, 0, MAX_SERVER_REGISTER);
+        words = read(server, buffer, MAX_SERVER_REGISTER);
+        if (words == -1){
+            PANIC("error reading from register_pipe");
+        }
+        else if (words == 0){
+            PANIC("error, got an EOF");
+        } 
+        printf("%4s%256s%32s\n",buffer, buffer+4, buffer+260);
+    }
+
+    close(afk_server);
+    close(server);
     return 0;
 }

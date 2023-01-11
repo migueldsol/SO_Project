@@ -1,4 +1,5 @@
 #include "logging.h"
+#include "betterassert.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -15,8 +16,6 @@
 #define MAX_SERVER_MESSAGE (1028)
 #define PUBLISHER_REGISTER_CODE (2)
 #define PUBLISHER_MESSAGE_CODE (10)
-#define boas "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-#define ayo "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"
     //FIXME verificar tamanho dos args
 
 int main(int argc, char **argv) {
@@ -48,11 +47,12 @@ int main(int argc, char **argv) {
 
     //create message to send to server
     // message format: [ code = 2 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
-    char *register_message = malloc(MAX_SERVER_REGISTER);
+    void *register_message = malloc(MAX_SERVER_REGISTER);
     memset(register_message, 0, MAX_SERVER_REGISTER);
-    sprintf(register_message, "%04d",PUBLISHER_REGISTER_CODE);
-    memcpy(register_message + 4, argv[2], strlen(argv[2]));
-    memcpy(register_message + 260, argv[3], strlen(argv[3]));
+    uint8_t register_code = PUBLISHER_REGISTER_CODE;
+    memcpy(register_message, &register_code,sizeof(uint8_t));
+    memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
+    memcpy(register_message + sizeof(uint8_t) +265, argv[3], strlen(argv[3]));
     
     assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) == MAX_SERVER_REGISTER);
 
@@ -72,6 +72,7 @@ int main(int argc, char **argv) {
     
     //QUESTIONS e so \n fazemos oq?
     //QUESTIONS se acabar em \0 termina?
+    uint8_t publisher_message_code = PUBLISHER_MESSAGE_CODE;
     while(fgets(buffer, MAX_MESSAGE, stdin) != NULL){
         buffer = strtok(buffer, "\n");
         size_t length = strlen(buffer);
@@ -85,10 +86,10 @@ int main(int argc, char **argv) {
         //  command format: [ code = 10 ] | [ message (char[1024]) ]
         
         memset(server_command, 0, MAX_SERVER_MESSAGE);
-        sprintf(server_command, "%04d", PUBLISHER_MESSAGE_CODE);
-        memcpy(server_command+4, buffer, MAX_MESSAGE);
+        memset(server_command, &publisher_message_code, sizeof(uint8_t));
+        memcpy(server_command+ sizeof(uint8_t), buffer, MAX_MESSAGE);
 
-        write(client_FIFO, server_command, MAX_SERVER_MESSAGE);
+        ALWAYS_ASSERT(write(client_FIFO, server_command, MAX_SERVER_MESSAGE) != -1, "error writing message");
         //FIXME just for testing
     }
 
