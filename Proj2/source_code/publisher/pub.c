@@ -71,6 +71,7 @@ int main(int argc, char **argv) {
     char *server_command = malloc(MAX_SERVER_MESSAGE);
     
     //QUESTIONS e so \n fazemos oq?
+    //QUESTIONS se acabar em \0 termina?
     while(fgets(buffer, MAX_MESSAGE, stdin) != NULL){
         buffer = strtok(buffer, "\n");
         size_t length = strlen(buffer);
