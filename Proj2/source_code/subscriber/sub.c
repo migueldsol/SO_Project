@@ -11,7 +11,8 @@
 #include <sys/stat.h>  
 
 #define FIFO_SERVER "server.fifo"
-#define MAX_SERVER_REGISTER (292)
+#define MAX_BOX_NAME (32)
+#define MAX_PIPE_NAME (256)
 #define MAX_MESSAGE (1024)
 #define MAX_SERVER_MESSAGE (1028)
 #define SUBSCRIBER_CODE (1)
@@ -48,13 +49,14 @@ int main(int argc, char **argv) {
     // message format: [ code = 1 (uint8_t)] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
 
     //TODO macros
-    char *register_message = malloc(MAX_SERVER_REGISTER);
-    memset(register_message, 0, MAX_SERVER_REGISTER);
-    sprintf(register_message, "%04d", SUBSCRIBER_CODE);
+    void *register_message = malloc(MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
+    uint8_t code = SUBSCRIBER_CODE;
+    memset(register_message, 0, MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
+    memcpy(register_message, &code, sizeof(uint8_t));
     memcpy(register_message + 4, argv[2], strlen(argv[2]));
     memcpy(register_message + 260, argv[3], strlen(argv[3]));
     
-    assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) == MAX_SERVER_REGISTER);
+    assert(write(register_FIFO, register_message, MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t)) == MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_RDONLY);
