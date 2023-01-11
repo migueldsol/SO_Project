@@ -15,4 +15,5 @@ struct Node *newNode(uint8_t last, char *box_name, uint64_t box_size, uint64_t n
 
 void insertAlreadySorted(struct Node **head, uint8_t last, char *box_name, uint64_t box_size, uint64_t n_publishers, uint64_t n_subcribers);
 
+void printList(struct Node *head);
 #endif // __MANAGER_H__

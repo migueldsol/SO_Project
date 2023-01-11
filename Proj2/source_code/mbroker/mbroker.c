@@ -99,7 +99,11 @@ void *worker_thread(void * arg){
                             ALWAYS_ASSERT(tfs_read(open_box, message, MAX_PUB_MESSAGE) != -1, "mbroker: Couldn't read the open box");
                             sprintf(buffer, "%04d", OP_CODE_SUB_RESPONSE);
                             memcpy(buffer + 4, message, MAX_PUB_MESSAGE);
-                            write(client_fifo, buffer, MAX_SUB_RESPONSE);
+
+                            if(write(client_fifo, buffer, MAX_SUB_RESPONSE) == -1){
+                                fprintf(stdout, "error in writing to clients fifo");
+                                break;
+                            }
                         }
                         ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
                         ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
@@ -162,7 +166,11 @@ void *worker_thread(void * arg){
                     memcpy(message, &(important_values->boxes[i].box_size), sizeof(uint64_t));
                     memcpy(message, &(important_values->boxes[i].number_publishers), sizeof(uint64_t));
                     memcpy(message, &(important_values->boxes[i].number_subscribers), sizeof(uint64_t));
-                    write(client_fifo, message, MAX_PUB_MESSAGE);
+
+                    if (write(client_fifo, message, MAX_PUB_MESSAGE) == -1){
+                        fprintf(stdout, "error in writing to clients fifo");
+                        break;
+                    }
 
                 }
                 break;
@@ -223,21 +231,25 @@ int main(int argc, char **argv) {
     //this makes the mbroker never stop blocking on a read since there is someone already connected
     //  to the pipe as a writer
 
+    int server = open(argv[1], O_RDONLY);
+    ALWAYS_ASSERT(server != -1, "error in opening the register pipe");
 
-    assert(server != 0);
+    int afk_server = open(argv[1], O_WRONLY);
+    ALWAYS_ASSERT(afk_server != -1, "error in opening the register pipe");
 
-    char *buffer = malloc(MAX_SERVER_REGISTER);
+    void *buffer = malloc(sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
     ssize_t words = 0;
     while(true){
-        memset(buffer, 0, MAX_SERVER_REGISTER);
-        words = read(server, buffer, MAX_SERVER_REGISTER);
+        memset(buffer, 0, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
+        words = read(server, buffer, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
         if (words == -1){
             PANIC("error reading from register_pipe");
         }
         else if (words == 0){
             PANIC("error, got an EOF");
         } 
-        printf("%4s%256s%32s\n",buffer, buffer+4, buffer+260);
+
+        //pcq_enqueue(queue, buffer);
     }
 
     close(afk_server);
@@ -245,3 +257,4 @@ int main(int argc, char **argv) {
     return 0;
 
 }
+
