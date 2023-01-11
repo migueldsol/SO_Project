@@ -53,8 +53,8 @@ int main(int argc, char **argv) {
     uint8_t code = SUBSCRIBER_CODE;
     memset(register_message, 0, MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
     memcpy(register_message, &code, sizeof(uint8_t));
-    memcpy(register_message + 4, argv[2], strlen(argv[2]));
-    memcpy(register_message + 260, argv[3], strlen(argv[3]));
+    memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
+    memcpy(register_message + sizeof(uint8_t) + MAX_PIPE_NAME, argv[3], strlen(argv[3]));
     
     assert(write(register_FIFO, register_message, MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t)) == MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
 
@@ -67,21 +67,18 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    char *buffer = malloc(MAX_SERVER_MESSAGE);
-    memset(buffer, 0, MAX_SERVER_MESSAGE);
+    char *buffer = malloc(sizeof(uint8_t) + MAX_MESSAGE);
+    memset(buffer, 0, sizeof(uint8_t) + MAX_MESSAGE);
 
-    char *message = malloc(MAX_MESSAGE);
     
 
     //reads message
     //  message format: [ code = 10 ] | [ message (char[1024]) ]
-    while(read(client_FIFO, buffer, MAX_SERVER_MESSAGE) != 0){
-        sscanf(buffer, "%1024c", message);
-        if (!message){
+    while(read(client_FIFO, buffer, sizeof(uint8_t) + MAX_MESSAGE) != 0){
+        if (strlen(buffer + sizeof(uint8_t)) == 0){
             break;
         }
-        fprintf(stdout, "%s\n", message);
-        memset(message, 0, MAX_MESSAGE);
+        fprintf(stdout, "%s\n", buffer + sizeof(uint8_t));
     }
 
     close(client_FIFO);
@@ -96,7 +93,6 @@ int main(int argc, char **argv) {
 
     free(register_message);
     free(buffer);
-    free(message);
 
     return 0;
 }

@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
                 fprintf(stdout, "OK\n");
             }
             else {
-                char *error = malloc(sizeof(MAX_MESSAGE));
+                char *error = malloc(MAX_MESSAGE);
                 memcpy(error, buffer + sizeof(uint32_t), MAX_MESSAGE);
                 fprintf(stdout, "ERROR %s\n", error);
             }
@@ -178,28 +178,40 @@ int main(int argc, char **argv) {
             buffer = malloc(sizeof(uint8_t) + MAX_BOX_NAME + 3 * sizeof(uint64_t));
             uint8_t last;
             char *box_name;
+            box_name = malloc(MAX_BOX_NAME);
             uint64_t box_size, n_publishers, n_subscribers;
 
             memcpy(&last, buffer, sizeof(uint8_t));
-            memcpy(box_name, buffer + sizeof(uint8_t), MAX_MESSAGE);
+            memcpy(box_name, buffer + sizeof(uint8_t), MAX_BOX_NAME);
             if (last == 1 && strlen(box_name) == 0){
                 fprintf(stdout, "NO BOXES FOUND\n");
                 break;
             }
 
-            struct node *head = NULL;
+            struct Node *head = NULL;
             
-            while (1){
+            while (last != 1){
                 buffer = malloc(2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t));
-                memset(buffer, 0, sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t))
-                ALWAYS_ASSERT(read(client_FIFO, buffer, 2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t)) != -1);
+                memset(buffer, 0, sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t));
+                ALWAYS_ASSERT(read(client_FIFO, buffer, 2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t)) != -1, "manager: couldn't write into clients fifo");
                 //tou bue atoa cm fazer ;7
+
+                memcpy(&last, buffer + sizeof(uint8_t), sizeof(uint8_t));
+                memcpy(box_name, buffer + 2*sizeof(uint8_t), MAX_BOX_NAME);
+                memcpy(&box_size, buffer + 2*sizeof(uint8_t) + MAX_BOX_NAME, sizeof(uint64_t));
+                memcpy(&n_publishers, buffer + 2*sizeof(uint8_t) + MAX_BOX_NAME +sizeof(uint64_t), sizeof(uint64_t));
+                memcpy(&n_subscribers, buffer + 2*sizeof(uint8_t) + MAX_BOX_NAME + 2*sizeof(uint64_t), sizeof(uint64_t));
+                
+                insertAlreadySorted(&head, last, box_name, box_size, n_publishers, n_subscribers);
+                memset(buffer, 0, 2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t));
+
             }
+            printList(head);
 
-
-        
-        fprintf(stdout, "%s\n", buffer);
-        memset(buffer, 0, MAX_ANSWER_SERVER);
+            break;
+        default:
+            PANIC("manager: code of command not found");
+            break;
     }
 
     close(client_FIFO);

@@ -11,7 +11,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>  
 
-#define MAX_SERVER_REGISTER (292)
+#define MAX_BOX_NAME (32)
+#define MAX_CLIENT_PIPE (256)
 #define MAX_MESSAGE (1024)
 #define MAX_SERVER_MESSAGE (1028)
 #define PUBLISHER_REGISTER_CODE (2)
@@ -47,14 +48,14 @@ int main(int argc, char **argv) {
 
     //create message to send to server
     // message format: [ code = 2 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
-    void *register_message = malloc(MAX_SERVER_REGISTER);
-    memset(register_message, 0, MAX_SERVER_REGISTER);
+    void *register_message = malloc(sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
+    memset(register_message, 0, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
     uint8_t register_code = PUBLISHER_REGISTER_CODE;
     memcpy(register_message, &register_code,sizeof(uint8_t));
     memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
-    memcpy(register_message + sizeof(uint8_t) +265, argv[3], strlen(argv[3]));
+    memcpy(register_message + sizeof(uint8_t) + MAX_CLIENT_PIPE, argv[3], strlen(argv[3]));
     
-    assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) == MAX_SERVER_REGISTER);
+    assert(write(register_FIFO, register_message, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME) == sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_WRONLY);
@@ -86,7 +87,7 @@ int main(int argc, char **argv) {
         //  command format: [ code = 10 ] | [ message (char[1024]) ]
         
         memset(server_command, 0, MAX_SERVER_MESSAGE);
-        memset(server_command, &publisher_message_code, sizeof(uint8_t));
+        memcpy(server_command, &publisher_message_code, sizeof(uint8_t));
         memcpy(server_command+ sizeof(uint8_t), buffer, MAX_MESSAGE);
 
         ALWAYS_ASSERT(write(client_FIFO, server_command, MAX_SERVER_MESSAGE) != -1, "error writing message");
