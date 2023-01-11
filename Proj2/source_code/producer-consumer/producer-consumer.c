@@ -1,6 +1,6 @@
 #include "producer-consumer.h"
 
-int pcp_create(pc_queue_t *queue, size_t capacity){
+int pcq_create(pc_queue_t *queue, size_t capacity){
     
     queue->pcq_buffer = malloc(capacity * sizeof(void*));
 
@@ -73,7 +73,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem){
     }
 
     queue->pcq_current_size += 1;
-    pthread_mutex_unlock(&(queue->pcq_current_size));
+    pthread_mutex_unlock(&(queue->pcq_current_size_lock));
 
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail += 1;
