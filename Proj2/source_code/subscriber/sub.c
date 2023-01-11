@@ -16,6 +16,8 @@
 #define MAX_SERVER_MESSAGE (1028)
 #define SUBSCRIBER_CODE (1)
 
+//QUESTIONS uint_8
+
 int main(int argc, char **argv) {
     //FIXME verificar tamanho dos args
     assert(argc == 4);
@@ -42,8 +44,10 @@ int main(int argc, char **argv) {
     }
     
     //create message to send to server
+    // 0001ola.fifo0\0\0\0\0....\0
     // message format: [ code = 1 (uint8_t)] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
 
+    //TODO macros
     char *register_message = malloc(MAX_SERVER_REGISTER);
     memset(register_message, 0, MAX_SERVER_REGISTER);
     sprintf(register_message, "%04d", SUBSCRIBER_CODE);

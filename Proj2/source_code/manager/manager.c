@@ -62,8 +62,11 @@ int main(int argc, char **argv) {
     else if (!strcmp(argv[3], REMOVE_COMMAND)){
         code = REMOVE_SEND_CODE;
     }
-    else {
+    else if (!strcmp(argv[3], LIST_COMMAND)){
         code = LIST_SEND_CODE;
+    }
+    else{
+        PANIC("ERROR: MANAGER COMMAND");
     }
 
     
