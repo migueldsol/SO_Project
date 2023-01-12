@@ -35,9 +35,9 @@
 #define UINT64_T_SIZE (8) // size of uint64_t
 #define MAX_MESSAGE (1024) // max size for the message to be sent from publisher
 // max size for the message reply from publisher or subscriber
-#define MAX_PUB_SUB_MESSAGE (MAX_MESSAGE + UINT8_T_SIZE) 
+#define MAX_PUB_SUB_MESSAGE (UINT8_T_SIZE + MAX_MESSAGE) 
 // max size for the message to be sent from the server to register a box/publisher/subscriber
-#define MAX_SERVER_REGISTER (MAX_PIPE_NAME + MAX_BOX_NAME + UINT8_T_SIZE)
+#define MAX_SERVER_REGISTER (UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME)
 // max size for the message to be sent from the server to list the boxes
 #define MAX_SERVER_BOX_LIST_REPLY (UINT8_T_SIZE + MAX_BOX_NAME + 3 * UINT64_T_SIZE) 
 // max size for the message to be sent to the server to list the boxes

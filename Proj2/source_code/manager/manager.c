@@ -3,6 +3,17 @@
 
 
 
+void free_linked_list(struct Node *head) {
+    struct Node *current = head;
+    struct Node *next;
+
+    while (current != NULL) {
+        next = current->next;
+        free(current->box_name);
+        free(current);
+        current = next;
+    }
+}
 
 struct Node *newNode(uint8_t last, char *box_name, uint64_t box_size, uint64_t n_publishers, uint64_t n_subcribers){
     struct Node *temp = (struct Node *)malloc(sizeof(struct Node));
@@ -103,7 +114,7 @@ int main(int argc, char **argv) {
     }
     
     assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) == MAX_SERVER_REGISTER);
-
+    free(register_message);
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_RDONLY);
 
@@ -114,22 +125,22 @@ int main(int argc, char **argv) {
     }
 
     void *buffer = malloc(UINT8_T_SIZE);
-
-    
+    memset(buffer, 0, UINT8_T_SIZE);
     //reads message
     //  message format: [ code = 4/6 ] | [ return_code (int32_t)] | [ message (char[1024]) ]
     //  or [ code = 8 ] | [ last (uint8_t)] | [ box_name char(32) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
     if(read(client_FIFO, buffer, UINT8_T_SIZE) == -1){
         PANIC("error reading from clients pipe");
     }
-
     uint8_t answer_code;
     memcpy(&answer_code, buffer, UINT8_T_SIZE);
+    free(buffer);
     switch (answer_code){
         case 4:
         case 6:
             uint32_t return_code;
             buffer = malloc(INT32_T_SIZE + MAX_MESSAGE);
+            memset(buffer, 0, INT32_T_SIZE + MAX_MESSAGE);
             if(read(client_FIFO, buffer, INT32_T_SIZE + MAX_MESSAGE) == -1){
                 PANIC("error readin from clients pipe");
             }
@@ -143,45 +154,54 @@ int main(int argc, char **argv) {
                 memcpy(error, buffer + INT32_T_SIZE, MAX_MESSAGE);
                 fprintf(stdout, "ERROR %s\n", error);
             }
+            free(buffer);
             break;
-        case 8:
-            buffer = malloc(MAX_SERVER_BOX_LIST_REPLY);
-            uint8_t last;
-            char *box_name;
-            box_name = malloc(MAX_BOX_NAME);
-            uint64_t box_size, n_publishers, n_subscribers;
 
+        case 8:
+            uint8_t last;
+            uint64_t box_size, n_publishers, n_subscribers;
+            char *box_name = malloc(MAX_BOX_NAME);
+            buffer = malloc(UINT8_T_SIZE + MAX_BOX_NAME + 3 * UINT64_T_SIZE);
+            memset(buffer, 0, UINT8_T_SIZE + MAX_BOX_NAME + 3 * UINT64_T_SIZE);
+            //we will handle the first message and verify if its the only one
+            if(read(client_FIFO, buffer, UINT8_T_SIZE + MAX_BOX_NAME + 3 * UINT64_T_SIZE) == -1){
+                PANIC("error readin from clients pipe");
+            }
             memcpy(&last, buffer, UINT8_T_SIZE);
             memcpy(box_name, buffer + UINT8_T_SIZE, MAX_BOX_NAME);
             if (last == 1 && strlen(box_name) == 0){
                 fprintf(stdout, "NO BOXES FOUND\n");
+                free(buffer);
                 break;
             }
-
-            struct Node *head = NULL;
+            memcpy(&box_size, buffer + UINT8_T_SIZE + MAX_BOX_NAME, UINT64_T_SIZE);
+            memcpy(&n_publishers, buffer + UINT8_T_SIZE + MAX_BOX_NAME +UINT64_T_SIZE, UINT64_T_SIZE);
+            memcpy(&n_subscribers, buffer + UINT8_T_SIZE + MAX_BOX_NAME + 2*UINT64_T_SIZE, UINT64_T_SIZE);
             
+            struct Node *head = NULL;
+            insertAlreadySorted(&head, last, box_name, box_size, n_publishers, n_subscribers);
+            free(buffer);
+            //now checking if its the last message if not repeting the process
             while (last != 1){
                 buffer = malloc(2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
-                memset(buffer, 0, UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
+                memset(buffer, 0, 2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
                 ALWAYS_ASSERT(read(client_FIFO, buffer, 2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE) != -1, "manager: couldn't write into clients fifo");
-                //tou bue atoa cm fazer ;7
-
                 memcpy(&last, buffer + UINT8_T_SIZE, UINT8_T_SIZE);
                 memcpy(box_name, buffer + 2*UINT8_T_SIZE, MAX_BOX_NAME);
                 memcpy(&box_size, buffer + 2*UINT8_T_SIZE + MAX_BOX_NAME, UINT64_T_SIZE);
                 memcpy(&n_publishers, buffer + 2*UINT8_T_SIZE + MAX_BOX_NAME +UINT64_T_SIZE, UINT64_T_SIZE);
                 memcpy(&n_subscribers, buffer + 2*UINT8_T_SIZE + MAX_BOX_NAME + 2*UINT64_T_SIZE, UINT64_T_SIZE);
-                
                 insertAlreadySorted(&head, last, box_name, box_size, n_publishers, n_subscribers);
-                memset(buffer, 0, 2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
-
+                free(buffer);
             }
             printList(head);
-
+            free_linked_list(head);
             break;
+
         default:
             PANIC("manager: code of command not found");
             break;
+            
     }
 
     close(client_FIFO);
