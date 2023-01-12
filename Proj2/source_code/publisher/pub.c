@@ -1,5 +1,4 @@
 #include "variables.h"
-    //FIXME verificar tamanho dos args
 
 int main(int argc, char **argv) {
 
@@ -13,7 +12,7 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
-
+    // check if the fifo was created
     if(mkfifo(argv[2], 0640) != 0){
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -23,6 +22,7 @@ int main(int argc, char **argv) {
     int register_FIFO = open(argv[1], O_WRONLY);
 
     //QUESTIONS meto o fprintf?
+    // check if the fifo was opened
     if (register_FIFO == -1){
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -38,11 +38,12 @@ int main(int argc, char **argv) {
     memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[3], strlen(argv[3]));
     
     assert(write(register_FIFO, register_message, UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME) == UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME);
-
+    free(register_message);
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_WRONLY);
 
     //QUESTIONS meto o fprintf?
+    //check if the client fifo was opened
     if (client_FIFO == -1){
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -67,13 +68,13 @@ int main(int argc, char **argv) {
 
         //setting up command to send to server
         //  command format: [ code = 10 ] | [ message (char[1024]) ]
-        
         memset(server_command, 0, MAX_PUB_SUB_MESSAGE);
         memcpy(server_command, &publisher_message_code, UINT8_T_SIZE);
         memcpy(server_command+ UINT8_T_SIZE, buffer, MAX_MESSAGE);
 
         ALWAYS_ASSERT(write(client_FIFO, server_command, MAX_PUB_SUB_MESSAGE) != -1, "error writing message");
-        //FIXME just for testing
+        free(buffer);
+        free(server_command);
     }
 
     close(client_FIFO);

@@ -3,7 +3,6 @@
 //QUESTIONS uint_8
 
 int main(int argc, char **argv) {
-    //FIXME verificar tamanho dos args
     assert(argc == 4);
 
     //create FIFO
@@ -12,7 +11,7 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
-
+    // check if the fifo was created
     if(mkfifo(argv[2], 0640) != 0){
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -22,6 +21,7 @@ int main(int argc, char **argv) {
     int register_FIFO = open(argv[1], O_WRONLY);
 
     //QUESTIONS meto o fprintf?
+    // check if the fifo was opened
     if (register_FIFO == -1){
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
@@ -31,7 +31,6 @@ int main(int argc, char **argv) {
     // 0001ola.fifo0\0\0\0\0....\0
     // message format: [ code = 1 (uint8_t)] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
 
-    //TODO macros
     void *register_message = malloc(MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
     uint8_t code = SUBSCRIBER_CODE;
     memset(register_message, 0, MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
@@ -40,6 +39,7 @@ int main(int argc, char **argv) {
     memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[3], strlen(argv[3]));
     
     assert(write(register_FIFO, register_message, MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE) == MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
+    free(register_message);
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_RDONLY);
@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
         }
         fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
     }
-
+    free(buffer);
     close(client_FIFO);
     close(register_FIFO);
 
@@ -73,9 +73,5 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
-
-    free(register_message);
-    free(buffer);
-
     return 0;
 }
