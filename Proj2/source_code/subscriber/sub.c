@@ -1,22 +1,4 @@
-#include "logging.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <unistd.h>
-#include <assert.h>
-#include <sys/types.h>
-#include <sys/stat.h>  
-
-#define FIFO_SERVER "server.fifo"
-#define MAX_BOX_NAME (32)
-#define MAX_PIPE_NAME (256)
-#define MAX_MESSAGE (1024)
-#define MAX_PUB_SUB_MESSAGE (1028)
-#define SUBSCRIBER_CODE (2)
-#define UINT8_T_SIZE (12)
+#include "variables.h"
 
 //QUESTIONS uint_8
 

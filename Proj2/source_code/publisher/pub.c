@@ -1,23 +1,4 @@
-#include "logging.h"
-#include "betterassert.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <unistd.h>
-#include <assert.h>
-#include <sys/types.h>
-#include <sys/stat.h>  
-
-#define MAX_BOX_NAME (32)
-#define MAX_CLIENT_PIPE (256)
-#define MAX_MESSAGE (1024)
-#define MAX_PUB_SUB_MESSAGE (1028)
-#define PUBLISHER_REGISTER_CODE (1)
-#define PUBLISHER_MESSAGE_CODE (10)
-#define UINT8_T_SIZE (12)
+#include "variables.h"
     //FIXME verificar tamanho dos args
 
 int main(int argc, char **argv) {
@@ -48,15 +29,15 @@ int main(int argc, char **argv) {
     }
 
     //create message to send to server
-    // message format: [ code = 2 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
-    void *register_message = malloc(UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME);
-    memset(register_message, 0, UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME);
-    uint8_t register_code = PUBLISHER_REGISTER_CODE;
+    // message format: [ code = 1 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
+    void *register_message = malloc(MAX_PUB_SUB_REQUEST);
+    memset(register_message, 0, MAX_PUB_SUB_REQUEST);
+    uint8_t register_code = PUBLISHER_CODE;
     memcpy(register_message, &register_code,UINT8_T_SIZE);
     memcpy(register_message + UINT8_T_SIZE, argv[2], strlen(argv[2]));
-    memcpy(register_message + UINT8_T_SIZE + MAX_CLIENT_PIPE, argv[3], strlen(argv[3]));
+    memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[3], strlen(argv[3]));
     
-    assert(write(register_FIFO, register_message, UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME) == UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME);
+    assert(write(register_FIFO, register_message, UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME) == UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME);
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_WRONLY);

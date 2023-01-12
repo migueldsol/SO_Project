@@ -1,42 +1,7 @@
-#include "logging.h"
-#include "betterassert.h"
 #include "manager.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <fcntl.h>
-#include <string.h>
-#include <unistd.h>
-#include <assert.h>
-#include <stdint.h>
-#include <sys/types.h>
-#include <sys/stat.h>  
+#include "variables.h"
 
-#define FIFO_SERVER "server.fifo"
-#define MAX_SERVER_REGISTER (256+32+1)
-#define MAX_PIPE_NAME (256)
-#define MAX_BOX_NAME (32)
-#define MAX_MESSAGE (1024)
-#define MAX_SERVER_MESSAGE (1028)
-#define MAX_ANSWER_SERVER (1032)
-#define SUBSCRIBER_CODE (1)
-#define MAX_SERVER_BOX_LIST_REPLY (12)
-#define UINT8_T_SIZE (12)
-#define UINT16_T_SIZE (12)
-#define UINT32_T_SIZE (12)
-#define UINT64_T_SIZE (12)
 
-#define CREATE_COMMAND "create"
-#define REMOVE_COMMAND "remove"
-#define LIST_COMMAND "list"
-#define MAX_SIZE_COMMAND (8)
-
-#define CREATE_SEND_CODE (3)
-#define CREATE_RECEIVE_CODE (4)
-#define REMOVE_SEND_CODE (5)
-#define REMOVE_RECEIVE_CODE (6)
-#define LIST_SEND_CODE (7)
-#define LIST_RECEIVE_CODE (8)
 
 
 struct Node *newNode(uint8_t last, char *box_name, uint64_t box_size, uint64_t n_publishers, uint64_t n_subcribers){
@@ -110,10 +75,10 @@ int main(int argc, char **argv) {
 
 
     if (!strcmp(argv[3], CREATE_COMMAND)){
-        register_code = CREATE_SEND_CODE;
+        register_code = CREATE_BOX_CODE;
     }
     else if (!strcmp(argv[3], REMOVE_COMMAND)){
-        register_code = REMOVE_SEND_CODE;
+        register_code = REMOVE_BOX_CODE;
     }
     else if (!strcmp(argv[3], LIST_COMMAND)){
         register_code = LIST_SEND_CODE;
@@ -164,18 +129,18 @@ int main(int argc, char **argv) {
         case 4:
         case 6:
             uint32_t return_code;
-            buffer = malloc(UINT32_T_SIZE + MAX_MESSAGE);
-            if(read(client_FIFO, buffer, UINT32_T_SIZE + MAX_MESSAGE) == -1){
+            buffer = malloc(INT32_T_SIZE + MAX_MESSAGE);
+            if(read(client_FIFO, buffer, INT32_T_SIZE + MAX_MESSAGE) == -1){
                 PANIC("error readin from clients pipe");
             }
 
-            memcpy(&return_code, buffer, UINT32_T_SIZE);
+            memcpy(&return_code, buffer, INT32_T_SIZE);
             if (return_code == 0){
                 fprintf(stdout, "OK\n");
             }
             else {
                 char *error = malloc(MAX_MESSAGE);
-                memcpy(error, buffer + UINT32_T_SIZE, MAX_MESSAGE);
+                memcpy(error, buffer + INT32_T_SIZE, MAX_MESSAGE);
                 fprintf(stdout, "ERROR %s\n", error);
             }
             break;
