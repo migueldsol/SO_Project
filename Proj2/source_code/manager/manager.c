@@ -129,7 +129,7 @@ int main(int argc, char **argv) {
     memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
     
     if (register_code != LIST_SEND_CODE){
-        memcpy(register_message + sizeof(uint8_t) + 256, argv[4], strlen(argv[4]));
+        memcpy(register_message + sizeof(uint8_t) + MAX_PIPE_NAME, argv[4], strlen(argv[4]));
     }
     
     assert(write(register_FIFO, register_message, sizeof(uint8_t) + MAX_PIPE_NAME + MAX_BOX_NAME) == sizeof(uint8_t) + MAX_PIPE_NAME + MAX_BOX_NAME);
@@ -159,18 +159,18 @@ int main(int argc, char **argv) {
         case 4:
         case 6:
             uint32_t return_code;
-            buffer = malloc(sizeof(uint32_t) + MAX_MESSAGE);
-            if(read(client_FIFO, buffer, sizeof(uint32_t) + MAX_MESSAGE) == -1){
+            buffer = malloc(sizeof(int32_t) + MAX_MESSAGE);
+            if(read(client_FIFO, buffer, sizeof(int32_t) + MAX_MESSAGE) == -1){
                 PANIC("error readin from clients pipe");
             }
 
-            memcpy(&return_code, buffer, sizeof(uint32_t));
+            memcpy(&return_code, buffer, sizeof(int32_t));
             if (return_code == 0){
                 fprintf(stdout, "OK\n");
             }
             else {
                 char *error = malloc(MAX_MESSAGE);
-                memcpy(error, buffer + sizeof(uint32_t), MAX_MESSAGE);
+                memcpy(error, buffer + sizeof(int32_t), MAX_MESSAGE);
                 fprintf(stdout, "ERROR %s\n", error);
             }
             break;
@@ -223,6 +223,8 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
+
+    //TODO falta dar free
 
     return 0;
 }
