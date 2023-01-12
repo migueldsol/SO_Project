@@ -61,7 +61,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem){
 
     pthread_mutex_lock(&(queue->pcq_tail_lock));
 
-
+    pthread_mutex_lock(&(queue->pcq_popper_condvar_lock));
     while (1){
         pthread_mutex_lock(&(queue->pcq_current_size_lock));
         //QUESTIONS tenho que dar lock a pcq_capacity?
@@ -72,6 +72,7 @@ int pcq_enqueue(pc_queue_t *queue, void *elem){
         pthread_mutex_unlock(&(queue->pcq_current_size_lock));
         pthread_cond_wait(&(queue->pcq_popper_condvar), &(queue->pcq_popper_condvar_lock));
     }
+    pthread_mutex_unlock(&(queue->pcq_popper_condvar_lock));
 
     queue->pcq_current_size += 1;
     pthread_mutex_unlock(&(queue->pcq_current_size_lock));
@@ -94,6 +95,7 @@ void *pcq_dequeue(pc_queue_t *queue){
 
     pthread_mutex_lock(&(queue->pcq_head_lock));
 
+    pthread_mutex_lock(&(queue->pcq_pusher_condvar_lock));
     while (1){
         pthread_mutex_lock(&(queue->pcq_current_size_lock));
         //QUESTIONS tenho que dar lock a pcq_capacity?
@@ -104,6 +106,7 @@ void *pcq_dequeue(pc_queue_t *queue){
         pthread_mutex_unlock(&(queue->pcq_current_size_lock));
         pthread_cond_wait(&(queue->pcq_pusher_condvar), &(queue->pcq_pusher_condvar_lock));
     }
+    pthread_mutex_unlock(&(queue->pcq_pusher_condvar_lock));
 
     queue->pcq_current_size -= 1;
     pthread_mutex_unlock(&(queue->pcq_current_size_lock));

@@ -15,7 +15,7 @@
 #define MAX_CLIENT_PIPE (256)
 #define MAX_MESSAGE (1024)
 #define MAX_SERVER_MESSAGE (1028)
-#define PUBLISHER_REGISTER_CODE (2)
+#define PUBLISHER_REGISTER_CODE (1)
 #define PUBLISHER_MESSAGE_CODE (10)
     //FIXME verificar tamanho dos args
 
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     while(fgets(buffer, MAX_MESSAGE, stdin) != NULL){
         buffer = strtok(buffer, "\n");
         size_t length = strlen(buffer);
-        if (!length){
+        if (length == 0){
             break;
         }
 
