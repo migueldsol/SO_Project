@@ -31,24 +31,17 @@ void *worker_thread(void * arg){
         box_name = malloc(MAX_BOX_NAME);
         memset(client_pipe_name, 0, MAX_CLIENT_PIPE);
         memset(box_name, 0, MAX_BOX_NAME);
-        memcpy(client_pipe_name, elem + 4, MAX_CLIENT_PIPE);
-        memcpy(box_name, elem + 4 + MAX_CLIENT_PIPE, MAX_BOX_NAME);
+        memcpy(client_pipe_name, elem + sizeof(uint8_t), MAX_CLIENT_PIPE);
+        memcpy(box_name, elem + sizeof(uint8_t) + MAX_CLIENT_PIPE, MAX_BOX_NAME);
         int client_fifo;
 
         switch (code){
             case 1:
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
-
+                client_fifo = open(client_pipe_name, O_RDONLY);
+                ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
                 for (int i = 0; i < important_values->num_box; i++){
-                    int cmp_value = strcmp(important_values->boxes[i].name, box_name);
-                    if ((cmp_value == 0 && important_values->boxes->number_publishers == 1) || i == important_values->num_box - 1){
-                        client_fifo = open(client_pipe_name, O_RDONLY);
-                        ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
-                        ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
-                        //pthread_rwlock_unlock(&(important_values->boxes_lock));
-                        break;
-                    }
-                    else if (cmp_value == 0){
+                    if (strcmp(important_values->boxes[i].name, box_name) == 0){
                         //pthread_rwlock_unlock(&(important_values->boxes_lock));
                         //pthread_mutex_lock(&(important_values->boxes[i].box_lock));
 
@@ -64,57 +57,52 @@ void *worker_thread(void * arg){
                             //FIXMEif box nao foi apagada
                             char * message = malloc(sizeof(char) * MAX_PUB_MESSAGE);
                             memset(message, 0, MAX_PUB_MESSAGE);
-                            memcpy(message, pub_response + 4,MAX_PUB_MESSAGE);
+                            memcpy(message, pub_response + sizeof(uint8_t),MAX_PUB_MESSAGE);
                             ssize_t size = tfs_write(open_box, message, MAX_PUB_MESSAGE);
                             important_values->boxes[i].box_size += (uint64_t)size;
                             memset(message, 0, MAX_PUB_MESSAGE);
                             memset(pub_response, 0, MAX_PUB_RESPONSE);
                         }
                         ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
-                        ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
                     }
                 } 
+                ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                 break;
             case 2:
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
 
+                client_fifo = open(client_pipe_name, O_WRONLY);
+                ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
+                        
                 for (int i = 0; i < important_values->num_box; i++){
-                    int cmp_value = strcmp(important_values->boxes[i].name, box_name);
-                    if (cmp_value == 0){
+
+                    if (strcmp(important_values->boxes[i].name, box_name) == 0){
 
                         //FIXME if box nao foi apagada 
-
-                        client_fifo = open(client_pipe_name, O_WRONLY);
-                        ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
                         
                         int open_box = tfs_open(box_name, 0);
-                        char *message = malloc(sizeof(char) * MAX_PUB_MESSAGE);
-                        char *buffer = malloc(sizeof(char) * MAX_SUB_RESPONSE);
+                        char *message = malloc(MAX_PUB_MESSAGE);
+                        char *buffer = malloc(sizeof(uint8_t) + MAX_PUB_MESSAGE);
+                        uint8_t response_code = OP_CODE_SUB_RESPONSE;
                         while(true){
             
                             //FIXME if box nao foi apagada
                             //FIXME esperar que o pub escreva (com cond_wait)
                             memset(message, 0, MAX_PUB_MESSAGE);
-                            memset(buffer, 0, MAX_SUB_RESPONSE);
+                            memset(buffer, 0, sizeof(uint8_t) + MAX_PUB_MESSAGE);
                             ALWAYS_ASSERT(tfs_read(open_box, message, MAX_PUB_MESSAGE) != -1, "mbroker: Couldn't read the open box");
-                            sprintf(buffer, "%04d", OP_CODE_SUB_RESPONSE);
-                            memcpy(buffer + 4, message, MAX_PUB_MESSAGE);
+                            memcpy(buffer, &response_code, sizeof(uint8_t));
+                            memcpy(buffer + sizeof(uint8_t), message, MAX_PUB_MESSAGE);
 
-                            if(write(client_fifo, buffer, MAX_SUB_RESPONSE) == -1){
+                            if(write(client_fifo, buffer, sizeof(uint8_t) + MAX_PUB_MESSAGE) == -1){
                                 fprintf(stdout, "error in writing to clients fifo");
                                 break;
                             }
                         }
                         ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
-                        ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
-                    }
-                    else if (i == important_values->num_box - 1){
-                        client_fifo = open(client_pipe_name, O_WRONLY);
-                        ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
-                        ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
-                        break;
                     }
                 }
+                ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
                 break;
             case 3:
                 int leave = 0;
@@ -175,6 +163,7 @@ void *worker_thread(void * arg){
                 }
                 break;
             default:
+                PANIC("error in worker thread");
                 break;
 
         }
@@ -237,9 +226,9 @@ int main(int argc, char **argv) {
     int afk_server = open(argv[1], O_WRONLY);
     ALWAYS_ASSERT(afk_server != -1, "error in opening the register pipe");
 
-    void *buffer = malloc(sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
     ssize_t words = 0;
     while(true){
+        void *buffer = malloc(sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
         memset(buffer, 0, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
         words = read(server, buffer, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
         if (words == -1){
@@ -249,7 +238,7 @@ int main(int argc, char **argv) {
             PANIC("error, got an EOF");
         } 
 
-        //pcq_enqueue(queue, buffer);
+        pcq_enqueue(queue, buffer);
     }
 
     close(afk_server);

@@ -15,7 +15,7 @@
 #define MAX_PIPE_NAME (256)
 #define MAX_MESSAGE (1024)
 #define MAX_SERVER_MESSAGE (1028)
-#define SUBSCRIBER_CODE (1)
+#define SUBSCRIBER_CODE (2)
 
 //QUESTIONS uint_8
 
