@@ -14,8 +14,9 @@
 #define MAX_BOX_NAME (32)
 #define MAX_PIPE_NAME (256)
 #define MAX_MESSAGE (1024)
-#define MAX_SERVER_MESSAGE (1028)
+#define MAX_PUB_SUB_MESSAGE (1028)
 #define SUBSCRIBER_CODE (2)
+#define UINT8_T_SIZE (12)
 
 //QUESTIONS uint_8
 
@@ -49,14 +50,14 @@ int main(int argc, char **argv) {
     // message format: [ code = 1 (uint8_t)] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
 
     //TODO macros
-    void *register_message = malloc(MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
+    void *register_message = malloc(MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
     uint8_t code = SUBSCRIBER_CODE;
-    memset(register_message, 0, MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
-    memcpy(register_message, &code, sizeof(uint8_t));
-    memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
-    memcpy(register_message + sizeof(uint8_t) + MAX_PIPE_NAME, argv[3], strlen(argv[3]));
+    memset(register_message, 0, MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
+    memcpy(register_message, &code, UINT8_T_SIZE);
+    memcpy(register_message + UINT8_T_SIZE, argv[2], strlen(argv[2]));
+    memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[3], strlen(argv[3]));
     
-    assert(write(register_FIFO, register_message, MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t)) == MAX_BOX_NAME + MAX_PIPE_NAME + sizeof(uint8_t));
+    assert(write(register_FIFO, register_message, MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE) == MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_RDONLY);
@@ -67,18 +68,18 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    char *buffer = malloc(sizeof(uint8_t) + MAX_MESSAGE);
-    memset(buffer, 0, sizeof(uint8_t) + MAX_MESSAGE);
+    char *buffer = malloc(MAX_PUB_SUB_MESSAGE);
+    memset(buffer, 0, MAX_PUB_SUB_MESSAGE);
 
     
 
     //reads message
     //  message format: [ code = 10 ] | [ message (char[1024]) ]
-    while(read(client_FIFO, buffer, sizeof(uint8_t) + MAX_MESSAGE) != 0){
-        if (strlen(buffer + sizeof(uint8_t)) == 0){
+    while(read(client_FIFO, buffer, MAX_PUB_SUB_MESSAGE) != 0){
+        if (strlen(buffer + UINT8_T_SIZE) == 0){
             break;
         }
-        fprintf(stdout, "%s\n", buffer + sizeof(uint8_t));
+        fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
     }
 
     close(client_FIFO);

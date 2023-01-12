@@ -14,9 +14,10 @@
 #define MAX_BOX_NAME (32)
 #define MAX_CLIENT_PIPE (256)
 #define MAX_MESSAGE (1024)
-#define MAX_SERVER_MESSAGE (1028)
+#define MAX_PUB_SUB_MESSAGE (1028)
 #define PUBLISHER_REGISTER_CODE (1)
 #define PUBLISHER_MESSAGE_CODE (10)
+#define UINT8_T_SIZE (12)
     //FIXME verificar tamanho dos args
 
 int main(int argc, char **argv) {
@@ -48,14 +49,14 @@ int main(int argc, char **argv) {
 
     //create message to send to server
     // message format: [ code = 2 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
-    void *register_message = malloc(sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
-    memset(register_message, 0, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
+    void *register_message = malloc(UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME);
+    memset(register_message, 0, UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME);
     uint8_t register_code = PUBLISHER_REGISTER_CODE;
-    memcpy(register_message, &register_code,sizeof(uint8_t));
-    memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
-    memcpy(register_message + sizeof(uint8_t) + MAX_CLIENT_PIPE, argv[3], strlen(argv[3]));
+    memcpy(register_message, &register_code,UINT8_T_SIZE);
+    memcpy(register_message + UINT8_T_SIZE, argv[2], strlen(argv[2]));
+    memcpy(register_message + UINT8_T_SIZE + MAX_CLIENT_PIPE, argv[3], strlen(argv[3]));
     
-    assert(write(register_FIFO, register_message, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME) == sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
+    assert(write(register_FIFO, register_message, UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME) == UINT8_T_SIZE + MAX_CLIENT_PIPE + MAX_BOX_NAME);
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_WRONLY);
@@ -69,7 +70,7 @@ int main(int argc, char **argv) {
     char *buffer = malloc(MAX_MESSAGE);
     memset(buffer, 0, MAX_MESSAGE);
 
-    char *server_command = malloc(MAX_SERVER_MESSAGE);
+    char *server_command = malloc(MAX_PUB_SUB_MESSAGE);
     
     //QUESTIONS e so \n fazemos oq?
     //QUESTIONS se acabar em \0 termina?
@@ -86,11 +87,11 @@ int main(int argc, char **argv) {
         //setting up command to send to server
         //  command format: [ code = 10 ] | [ message (char[1024]) ]
         
-        memset(server_command, 0, MAX_SERVER_MESSAGE);
-        memcpy(server_command, &publisher_message_code, sizeof(uint8_t));
-        memcpy(server_command+ sizeof(uint8_t), buffer, MAX_MESSAGE);
+        memset(server_command, 0, MAX_PUB_SUB_MESSAGE);
+        memcpy(server_command, &publisher_message_code, UINT8_T_SIZE);
+        memcpy(server_command+ UINT8_T_SIZE, buffer, MAX_MESSAGE);
 
-        ALWAYS_ASSERT(write(client_FIFO, server_command, MAX_SERVER_MESSAGE) != -1, "error writing message");
+        ALWAYS_ASSERT(write(client_FIFO, server_command, MAX_PUB_SUB_MESSAGE) != -1, "error writing message");
         //FIXME just for testing
     }
 
