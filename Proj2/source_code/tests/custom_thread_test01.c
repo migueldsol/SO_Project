@@ -1,23 +1,23 @@
 #include "../fs/operations.h"
 #include <assert.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <pthread.h>
 
 char file_contents[] = "SO PROJECT!!!";
 char text_path[] = "tests/customTEXT.txt";
-char  f1[] = "/f1";
-char  f2[] = "/f2";
-char  f3[] = "/f3";
-char  f4[] = "/f4";
-char  f5[] = "/f5";
-char  l1[] = "/l1";
-char  l2[] = "/l2";
-char  l3[] = "/l3";
-char  l4[] = "/l4";
-char  l5[] = "/l5";
+char f1[] = "/f1";
+char f2[] = "/f2";
+char f3[] = "/f3";
+char f4[] = "/f4";
+char f5[] = "/f5";
+char l1[] = "/l1";
+char l2[] = "/l2";
+char l3[] = "/l3";
+char l4[] = "/l4";
+char l5[] = "/l5";
 
 void create(char path[]) {
     int fd = tfs_open(path, TFS_O_CREAT);
@@ -25,7 +25,7 @@ void create(char path[]) {
     assert(tfs_close(fd) != -1);
 }
 
-void assert_empty_file(char  *path) {
+void assert_empty_file(char *path) {
     pthread_t pthread_self(void);
     int f = tfs_open(path, 0);
     printf("pode dar erro\n");
@@ -36,7 +36,7 @@ void assert_empty_file(char  *path) {
     assert(tfs_close(f) != -1);
 }
 
-void assert_contents_ok(char  *path) {
+void assert_contents_ok(char *path) {
     int f = tfs_open(path, 0);
     assert(f != -1);
 
@@ -47,7 +47,7 @@ void assert_contents_ok(char  *path) {
     assert(tfs_close(f) != -1);
 }
 
-void write_contents(char  *path) {
+void write_contents(char *path) {
     int f = tfs_open(path, TFS_O_APPEND);
     assert(f != -1);
 
@@ -82,7 +82,7 @@ void *th_run02() {
 void *th_run03() {
     assert_empty_file(f3);
     assert(tfs_link(f3, l3) != -1);
-        printf("entrei3\n");
+    printf("entrei3\n");
     assert_empty_file(l3);
     assert(tfs_sym_link(f3, l4) != -1);
     assert_empty_file(l4);
@@ -111,7 +111,7 @@ void *th_run04() {
 }
 
 void *th_run05() {
-    create(f5);    
+    create(f5);
     printf("entrei5\n");
 
     assert_empty_file(f5);
@@ -128,35 +128,32 @@ void *th_run05() {
 }
 
 int main() {
-    for (int i = 0; i < 10000; i++){
-    assert(tfs_init(NULL) != -1);
+    for (int i = 0; i < 10000; i++) {
+        assert(tfs_init(NULL) != -1);
 
-    create(f1);
-    create(f2);
-    create(f3);
+        create(f1);
+        create(f2);
+        create(f3);
 
-    // Creates threads
-    pthread_t t1,t2,t3,t4,t5;
-    //t2, t3, t4, t5;
+        // Creates threads
+        pthread_t t1, t2, t3, t4, t5;
+        // t2, t3, t4, t5;
 
-    // Every thread runs multiple instructions in a single file
-    assert(pthread_create(&t1, NULL, th_run01, NULL) == 0);
-    assert(pthread_create(&t2, NULL, th_run02, NULL) == 0);
-    assert(pthread_create(&t3, NULL, th_run03, NULL) == 0);
-    assert(pthread_create(&t4, NULL, th_run04, NULL) == 0);
-    assert(pthread_create(&t5, NULL, th_run05, NULL) == 0);
-    
+        // Every thread runs multiple instructions in a single file
+        assert(pthread_create(&t1, NULL, th_run01, NULL) == 0);
+        assert(pthread_create(&t2, NULL, th_run02, NULL) == 0);
+        assert(pthread_create(&t3, NULL, th_run03, NULL) == 0);
+        assert(pthread_create(&t4, NULL, th_run04, NULL) == 0);
+        assert(pthread_create(&t5, NULL, th_run05, NULL) == 0);
 
-    // Joins threads
-    assert(pthread_join(t1, NULL) == 0);
-    assert(pthread_join(t2, NULL) == 0);
-    assert(pthread_join(t3, NULL) == 0);
-    assert(pthread_join(t4, NULL) == 0);
-    assert(pthread_join(t5, NULL) == 0);
-    
+        // Joins threads
+        assert(pthread_join(t1, NULL) == 0);
+        assert(pthread_join(t2, NULL) == 0);
+        assert(pthread_join(t3, NULL) == 0);
+        assert(pthread_join(t4, NULL) == 0);
+        assert(pthread_join(t5, NULL) == 0);
 
-
-    assert(tfs_destroy() != -1);
+        assert(tfs_destroy() != -1);
     }
     printf("Successful test.\n");
     return 0;
