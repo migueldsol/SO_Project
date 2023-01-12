@@ -25,10 +25,14 @@ void *worker_thread(void * arg){
 
         switch (code){
             case 1:
+            //PUBLISHER
+
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
                 client_fifo = open(client_pipe_name, O_RDONLY);
                 ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
+                //search for the box
                 for (int i = 0; i < important_values->num_box; i++){
+                    //if box exist open it and start writting
                     if (strcmp(important_values->boxes[i].name, box_name) == 0){
                         //pthread_rwlock_unlock(&(important_values->boxes_lock));
                         //pthread_mutex_lock(&(important_values->boxes[i].box_lock));
@@ -41,6 +45,8 @@ void *worker_thread(void * arg){
                         char *pub_response = malloc(sizeof(char) * MAX_PUB_SUB_MESSAGE);
                         memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                         int open_box = tfs_open(box_name, TFS_O_APPEND);
+
+                        //reading from publisher
                         while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) != 0){
                             //FIXMEif box nao foi apagada
                             char * message = malloc(sizeof(char) * MAX_MESSAGE);
@@ -58,13 +64,16 @@ void *worker_thread(void * arg){
                 ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                 break;
             case 2:
+            //SUBSCRIBER
+
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
 
                 client_fifo = open(client_pipe_name, O_WRONLY);
                 ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
-                        
+                
+                //search for box
                 for (int i = 0; i < important_values->num_box; i++){
-
+                    //if box exists start reading
                     if (strcmp(important_values->boxes[i].name, box_name) == 0){
 
                         //FIXME if box nao foi apagada 
@@ -73,13 +82,21 @@ void *worker_thread(void * arg){
                         char *message = malloc(MAX_MESSAGE);
                         char *buffer = malloc(MAX_PUB_SUB_MESSAGE);
                         uint8_t response_code = SUBSCRIBER_MESSAGE_CODE;
+
+                        //controlling how much of the file i've read
+                        ssize_t read_counter = 0;
                         while(true){
-            
+                            ssize_t read_current;
                             //FIXME if box nao foi apagada
                             //FIXME esperar que o pub escreva (com cond_wait)
                             memset(message, 0, MAX_MESSAGE);
                             memset(buffer, 0, MAX_PUB_SUB_MESSAGE);
-                            ALWAYS_ASSERT(tfs_read(open_box, message, MAX_MESSAGE) != -1, "mbroker: Couldn't read the open box");
+
+                            //while read_current < size of box meter cond variable
+                            read_current = tfs_read(open_box, message, MAX_MESSAGE);
+                            ALWAYS_ASSERT(read_current != -1, "mbroker: Couldn't read the open box");
+
+                            read_counter += read_current;
                             //TODO retirar espera ativa
                             memcpy(buffer, &response_code, UINT8_T_SIZE);
                             memcpy(buffer + UINT8_T_SIZE, message, MAX_MESSAGE);
@@ -95,22 +112,27 @@ void *worker_thread(void * arg){
                 ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
                 break;
             case 3:
-                int leave = 0;
+            //MANAGER create
+                bool leave = 0;
                 client_fifo = open(client_pipe_name, O_WRONLY);
                 void *manager_create_response = malloc(MAX_SERVER_REQUEST_REPLY);
                 memset(manager_create_response, 0, MAX_SERVER_REQUEST_REPLY);
                 uint8_t code_manager_create_reponse = CREATE_BOX_CODE_REPLY;
-                int32_t return_code;
+                int32_t return_code_create;
                 memcpy(manager_create_response, &code_manager_create_reponse, UINT8_T_SIZE);
+
+                //search for box with same name
                 for (int i = 0; i < important_values->num_box; i++){
+                    //if exists got to stop program
                     if (strcmp(important_values->boxes[i].name, box_name) == 0){
                         leave = 1;
                     }
                 }
+                //terminate
                 if (leave == 1){
                     char error_message[] = "Error: box name already exists";
-                    return_code = -1;
-                    memcpy(manager_create_response + UINT8_T_SIZE, &return_code, INT32_T_SIZE);
+                    return_code_create = -1;
+                    memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
                     memcpy(manager_create_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
 
                     ALWAYS_ASSERT(write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY) == MAX_SERVER_REQUEST_REPLY, "Couldn't write in clients fifo");
@@ -119,10 +141,11 @@ void *worker_thread(void * arg){
                 }
 
                 int new_box = tfs_open(box_name, TFS_O_CREAT);
+                //if cannot create box
                 if (new_box == -1){
                     char error_message[] = "Error: box limit exceeded";
-                    return_code = -1;
-                    memcpy(manager_create_response + UINT8_T_SIZE, &return_code, INT32_T_SIZE);
+                    return_code_create = -1;
+                    memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
                     memcpy(manager_create_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
                     ALWAYS_ASSERT(write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY) == MAX_SERVER_REQUEST_REPLY, "Couldn't write in clients fifo");
                     ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
@@ -130,23 +153,45 @@ void *worker_thread(void * arg){
                 }
                 important_values->boxes[important_values->num_box].name = box_name;
                 important_values->num_box++;
-                return_code = 0;
-                memcpy(manager_create_response + UINT8_T_SIZE, &return_code, INT32_T_SIZE);
+                return_code_create = 0;
+                memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
                 
                 ALWAYS_ASSERT(write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY) == MAX_SERVER_REQUEST_REPLY, "Couldn't write in clients fifo");
                 ALWAYS_ASSERT(tfs_close(new_box) != -1, "worker thread manager create error: couldn't close created box");
                 ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                 break;
             case 5:
+            //MANAGER remove
+                bool flag = 0;
+                void *manager_remove_response = malloc(MAX_SERVER_REQUEST_REPLY);
+                memset(manager_remove_response, 0, MAX_SERVER_REQUEST_REPLY);
+                uint8_t manager_remove_reponse_code = REMOVE_BOX_CODE_REPLY;
+                int32_t return_code_remove = -1;
+                char error_message[] = {"Box not found"};
+
+                memcpy(manager_remove_response, &manager_remove_reponse_code, UINT8_T_SIZE);
+
                 client_fifo = open(client_pipe_name, O_WRONLY);
 
+                //search for box
                 for (int i = 0; i < important_values->num_box; i++){
-                    if (strcmp(important_values->boxes[i].name, box_name) == 0 && code == 3){
-                        
+                    //if box exists remove
+                    if (strcmp(important_values->boxes[i].name, box_name) == 0){
+                        ALWAYS_ASSERT(tfs_unlink(box_name) != -1, "Couldn't unlink box");
+                        return_code_remove = 0;
+                        flag = 1;
                     }
                 }
+                //box not removed
+                if (flag == 0){
+                    memcpy(manager_remove_response, error_message, strlen(error_message));
+                }
+
+                memcpy(manager_remove_response, &return_code_remove, UINT8_T_SIZE);
+                ALWAYS_ASSERT(write(client_fifo, manager_remove_response, MAX_SERVER_REQUEST_REPLY) == MAX_SERVER_REQUEST_REPLY, "Error in writting clients fifo");
                 break;
-            case 7://list boxes
+            case 7:
+            //MANAGER list
                 client_fifo = open(client_pipe_name, O_WRONLY);
                 uint8_t code_8 = 8;
                 if(client_fifo == -1){
