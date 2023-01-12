@@ -28,6 +28,7 @@ void *worker_thread(void * arg){
             //PUBLISHER
 
                 //pthread_rw_rdlock(&(important_values->boxes_lock));
+                //TODO colocar box locks
                 client_fifo = open(client_pipe_name, O_RDONLY);
                 ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
                 //search for the box
@@ -38,6 +39,7 @@ void *worker_thread(void * arg){
                         //pthread_mutex_lock(&(important_values->boxes[i].box_lock));
 
                         //FIXME if box nao foi apagada 
+                        //TODO colocar cond variables para as box
 
                         client_fifo = open(client_pipe_name, O_RDONLY);
                         ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
@@ -45,6 +47,9 @@ void *worker_thread(void * arg){
                         char *pub_response = malloc(sizeof(char) * MAX_PUB_SUB_MESSAGE);
                         memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                         int open_box = tfs_open(box_name, TFS_O_APPEND);
+
+                        //increment publishers in box
+                        important_values->boxes[i].number_publishers+= 1;
 
                         //reading from publisher
                         while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) != 0){
@@ -79,8 +84,10 @@ void *worker_thread(void * arg){
                         //FIXME if box nao foi apagada 
                         
                         int open_box = tfs_open(box_name, 0);
+                        ALWAYS_ASSERT(open_box != -1, "error in opening box");
                         char *message = malloc(MAX_MESSAGE);
-                        char *buffer = malloc(MAX_PUB_SUB_MESSAGE);
+                        char *message_to_send = malloc(MAX_PUB_SUB_MESSAGE);
+                        char *current_message = malloc(MAX_MESSAGE);
                         uint8_t response_code = SUBSCRIBER_MESSAGE_CODE;
 
                         //controlling how much of the file i've read
@@ -89,8 +96,8 @@ void *worker_thread(void * arg){
                             ssize_t read_current;
                             //FIXME if box nao foi apagada
                             //FIXME esperar que o pub escreva (com cond_wait)
-                            memset(message, 0, MAX_MESSAGE);
-                            memset(buffer, 0, MAX_PUB_SUB_MESSAGE);
+                            memset(message_to_send, 0, MAX_PUB_SUB_MESSAGE);
+                            memcpy(message_to_send, &response_code, UINT8_T_SIZE);
 
                             //while read_current < size of box meter cond variable
                             read_current = tfs_read(open_box, message, MAX_MESSAGE);
@@ -98,15 +105,28 @@ void *worker_thread(void * arg){
 
                             read_counter += read_current;
                             //TODO retirar espera ativa
-                            memcpy(buffer, &response_code, UINT8_T_SIZE);
-                            memcpy(buffer + UINT8_T_SIZE, message, MAX_MESSAGE);
 
-                            if(write(client_fifo, buffer, MAX_PUB_SUB_MESSAGE) == -1){
-                                fprintf(stdout, "error in writing to clients fifo");
-                                break;
+                            size_t offset = 0;
+                            size_t size = strlen(message);
+
+                            while(offset != read_current && size != 0){
+                                memcpy(current_message, message + offset, size + 1);
+
+                                memcpy(message_to_send + UINT8_T_SIZE, current_message, MAX_MESSAGE);
+
+                                if(write(client_fifo, message_to_send, MAX_PUB_SUB_MESSAGE) == -1){
+                                    fprintf(stdout, "error in writing to clients fifo");
+                                    break;
+                                }
+                                memset(current_message, 0, MAX_MESSAGE);
+                                memset(message_to_send + UINT8_T_SIZE, 0, MAX_PUB_SUB_MESSAGE - UINT8_T_SIZE);
+                                offset += size + 1;
+                                size = strlen(message + offset);
+
                             }
                         }
                         ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
+
                     }
                 }
                 ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the clients pipe");
