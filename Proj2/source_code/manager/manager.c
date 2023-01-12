@@ -20,6 +20,11 @@
 #define MAX_SERVER_MESSAGE (1028)
 #define MAX_ANSWER_SERVER (1032)
 #define SUBSCRIBER_CODE (1)
+#define MAX_SERVER_BOX_LIST_REPLY (12)
+#define UINT8_T_SIZE (12)
+#define UINT16_T_SIZE (12)
+#define UINT32_T_SIZE (12)
+#define UINT64_T_SIZE (12)
 
 #define CREATE_COMMAND "create"
 #define REMOVE_COMMAND "remove"
@@ -122,17 +127,17 @@ int main(int argc, char **argv) {
         // message format: [ code = 3/5 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
         // or [code = 7 ] | [ client_named_pipe_path (char[256])]
 
-    void *register_message = malloc(sizeof(uint8_t) + MAX_PIPE_NAME + MAX_BOX_NAME);
-    memset(register_message, 0, sizeof(uint8_t) + MAX_PIPE_NAME + MAX_BOX_NAME);
+    void *register_message = malloc(MAX_SERVER_REGISTER);
+    memset(register_message, 0, MAX_SERVER_REGISTER);
 
-    memcpy(register_message, &register_code, sizeof(uint8_t));
-    memcpy(register_message + sizeof(uint8_t), argv[2], strlen(argv[2]));
+    memcpy(register_message, &register_code, UINT8_T_SIZE);
+    memcpy(register_message + UINT8_T_SIZE, argv[2], strlen(argv[2]));
     
     if (register_code != LIST_SEND_CODE){
-        memcpy(register_message + sizeof(uint8_t) + MAX_PIPE_NAME, argv[4], strlen(argv[4]));
+        memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[4], strlen(argv[4]));
     }
     
-    assert(write(register_FIFO, register_message, sizeof(uint8_t) + MAX_PIPE_NAME + MAX_BOX_NAME) == sizeof(uint8_t) + MAX_PIPE_NAME + MAX_BOX_NAME);
+    assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) == MAX_SERVER_REGISTER);
 
     //opens clients FIFO
     int client_FIFO = open(argv[2], O_RDONLY);
@@ -143,46 +148,46 @@ int main(int argc, char **argv) {
         exit(EXIT_FAILURE);
     }
 
-    void *buffer = malloc(sizeof(uint8_t));
+    void *buffer = malloc(UINT8_T_SIZE);
 
     
     //reads message
     //  message format: [ code = 4/6 ] | [ return_code (int32_t)] | [ message (char[1024]) ]
     //  or [ code = 8 ] | [ last (uint8_t)] | [ box_name char(32) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
-    if(read(client_FIFO, buffer, sizeof(uint8_t)) == -1){
+    if(read(client_FIFO, buffer, UINT8_T_SIZE) == -1){
         PANIC("error reading from clients pipe");
     }
 
     uint8_t answer_code;
-    memcpy(&answer_code, buffer, sizeof(uint8_t));
+    memcpy(&answer_code, buffer, UINT8_T_SIZE);
     switch (answer_code){
         case 4:
         case 6:
             uint32_t return_code;
-            buffer = malloc(sizeof(int32_t) + MAX_MESSAGE);
-            if(read(client_FIFO, buffer, sizeof(int32_t) + MAX_MESSAGE) == -1){
+            buffer = malloc(UINT32_T_SIZE + MAX_MESSAGE);
+            if(read(client_FIFO, buffer, UINT32_T_SIZE + MAX_MESSAGE) == -1){
                 PANIC("error readin from clients pipe");
             }
 
-            memcpy(&return_code, buffer, sizeof(int32_t));
+            memcpy(&return_code, buffer, UINT32_T_SIZE);
             if (return_code == 0){
                 fprintf(stdout, "OK\n");
             }
             else {
                 char *error = malloc(MAX_MESSAGE);
-                memcpy(error, buffer + sizeof(int32_t), MAX_MESSAGE);
+                memcpy(error, buffer + UINT32_T_SIZE, MAX_MESSAGE);
                 fprintf(stdout, "ERROR %s\n", error);
             }
             break;
         case 8:
-            buffer = malloc(sizeof(uint8_t) + MAX_BOX_NAME + 3 * sizeof(uint64_t));
+            buffer = malloc(MAX_SERVER_BOX_LIST_REPLY);
             uint8_t last;
             char *box_name;
             box_name = malloc(MAX_BOX_NAME);
             uint64_t box_size, n_publishers, n_subscribers;
 
-            memcpy(&last, buffer, sizeof(uint8_t));
-            memcpy(box_name, buffer + sizeof(uint8_t), MAX_BOX_NAME);
+            memcpy(&last, buffer, UINT8_T_SIZE);
+            memcpy(box_name, buffer + UINT8_T_SIZE, MAX_BOX_NAME);
             if (last == 1 && strlen(box_name) == 0){
                 fprintf(stdout, "NO BOXES FOUND\n");
                 break;
@@ -191,19 +196,19 @@ int main(int argc, char **argv) {
             struct Node *head = NULL;
             
             while (last != 1){
-                buffer = malloc(2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t));
-                memset(buffer, 0, sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t));
-                ALWAYS_ASSERT(read(client_FIFO, buffer, 2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t)) != -1, "manager: couldn't write into clients fifo");
+                buffer = malloc(2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
+                memset(buffer, 0, UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
+                ALWAYS_ASSERT(read(client_FIFO, buffer, 2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE) != -1, "manager: couldn't write into clients fifo");
                 //tou bue atoa cm fazer ;7
 
-                memcpy(&last, buffer + sizeof(uint8_t), sizeof(uint8_t));
-                memcpy(box_name, buffer + 2*sizeof(uint8_t), MAX_BOX_NAME);
-                memcpy(&box_size, buffer + 2*sizeof(uint8_t) + MAX_BOX_NAME, sizeof(uint64_t));
-                memcpy(&n_publishers, buffer + 2*sizeof(uint8_t) + MAX_BOX_NAME +sizeof(uint64_t), sizeof(uint64_t));
-                memcpy(&n_subscribers, buffer + 2*sizeof(uint8_t) + MAX_BOX_NAME + 2*sizeof(uint64_t), sizeof(uint64_t));
+                memcpy(&last, buffer + UINT8_T_SIZE, UINT8_T_SIZE);
+                memcpy(box_name, buffer + 2*UINT8_T_SIZE, MAX_BOX_NAME);
+                memcpy(&box_size, buffer + 2*UINT8_T_SIZE + MAX_BOX_NAME, UINT64_T_SIZE);
+                memcpy(&n_publishers, buffer + 2*UINT8_T_SIZE + MAX_BOX_NAME +UINT64_T_SIZE, UINT64_T_SIZE);
+                memcpy(&n_subscribers, buffer + 2*UINT8_T_SIZE + MAX_BOX_NAME + 2*UINT64_T_SIZE, UINT64_T_SIZE);
                 
                 insertAlreadySorted(&head, last, box_name, box_size, n_publishers, n_subscribers);
-                memset(buffer, 0, 2 * sizeof(uint8_t) + MAX_MESSAGE + 3 * sizeof(uint64_t));
+                memset(buffer, 0, 2 * UINT8_T_SIZE + MAX_MESSAGE + 3 * UINT64_T_SIZE);
 
             }
             printList(head);
