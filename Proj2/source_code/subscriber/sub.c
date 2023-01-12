@@ -5,6 +5,8 @@
 int main(int argc, char **argv) {
     assert(argc == 4);
 
+    //TODO dar handle a fechar o pipe
+    //TODO dar handle a caixa ser removida pelo manager
     //create FIFO
     if (unlink(argv[2]) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[2],
@@ -54,7 +56,7 @@ int main(int argc, char **argv) {
     memset(buffer, 0, MAX_PUB_SUB_MESSAGE);
 
     
-
+    //TODO dar handle a sigint
     //reads message
     //  message format: [ code = 10 ] | [ message (char[1024]) ]
     while(read(client_FIFO, buffer, MAX_PUB_SUB_MESSAGE) != 0){
