@@ -73,9 +73,9 @@ int main(int argc, char **argv) {
         memcpy(server_command+ UINT8_T_SIZE, buffer, MAX_MESSAGE);
 
         ALWAYS_ASSERT(write(client_FIFO, server_command, MAX_PUB_SUB_MESSAGE) != -1, "error writing message");
-        free(buffer);
-        free(server_command);
     }
+    free(buffer);
+    free(server_command);
 
     close(client_FIFO);
     close(register_FIFO);
