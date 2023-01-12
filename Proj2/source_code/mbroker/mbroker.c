@@ -18,6 +18,7 @@
 #define MAX_PUB_MESSAGE (1024)
 #define MAX_SUB_RESPONSE (1028)
 #define OP_CODE_SUB_RESPONSE (10)
+#define OP_CODE_MANAGER_CREATE_REP (4)
     //FIXME verificar tamanho dos args
 
 void *worker_thread(void * arg){
@@ -28,11 +29,12 @@ void *worker_thread(void * arg){
         memcpy(&code, elem, sizeof(int8_t));
         char *client_pipe_name, *box_name;
         client_pipe_name = malloc(MAX_CLIENT_PIPE);
-        box_name = malloc(MAX_BOX_NAME);
+        box_name = malloc(MAX_BOX_NAME + 1);
         memset(client_pipe_name, 0, MAX_CLIENT_PIPE);
         memset(box_name, 0, MAX_BOX_NAME);
         memcpy(client_pipe_name, elem + sizeof(uint8_t), MAX_CLIENT_PIPE);
-        memcpy(box_name, elem + sizeof(uint8_t) + MAX_CLIENT_PIPE, MAX_BOX_NAME);
+        memcpy(box_name + 1, elem + sizeof(uint8_t) + MAX_CLIENT_PIPE, MAX_BOX_NAME);
+        box_name[0] = '/';
         int client_fifo;
 
         switch (code){
@@ -59,6 +61,7 @@ void *worker_thread(void * arg){
                             memset(message, 0, MAX_PUB_MESSAGE);
                             memcpy(message, pub_response + sizeof(uint8_t),MAX_PUB_MESSAGE);
                             ssize_t size = tfs_write(open_box, message, MAX_PUB_MESSAGE);
+                            //TODO verificar a escrita
                             important_values->boxes[i].box_size += (uint64_t)size;
                             memset(message, 0, MAX_PUB_MESSAGE);
                             memset(pub_response, 0, MAX_PUB_RESPONSE);
@@ -91,6 +94,7 @@ void *worker_thread(void * arg){
                             memset(message, 0, MAX_PUB_MESSAGE);
                             memset(buffer, 0, sizeof(uint8_t) + MAX_PUB_MESSAGE);
                             ALWAYS_ASSERT(tfs_read(open_box, message, MAX_PUB_MESSAGE) != -1, "mbroker: Couldn't read the open box");
+                            //TODO retirar espera ativa
                             memcpy(buffer, &response_code, sizeof(uint8_t));
                             memcpy(buffer + sizeof(uint8_t), message, MAX_PUB_MESSAGE);
 
@@ -107,22 +111,43 @@ void *worker_thread(void * arg){
             case 3:
                 int leave = 0;
                 client_fifo = open(client_pipe_name, O_WRONLY);
+                void *manager_create_response = malloc(sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE);
+                memset(manager_create_response, 0, sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE);
+                uint8_t code_manager_create_reponse = OP_CODE_MANAGER_CREATE_REP;
+                int32_t return_code;
+                memcpy(manager_create_response, &code_manager_create_reponse, sizeof(uint8_t));
                 for (int i = 0; i < important_values->num_box; i++){
                     if (strcmp(important_values->boxes[i].name, box_name) == 0){
                         leave = 1;
                     }
                 }
                 if (leave == 1){
-                    //FIXME ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
+                    char error_message[] = "Error: box name already exists";
+                    return_code = -1;
+                    memcpy(manager_create_response + sizeof(uint8_t), &return_code, sizeof(int32_t));
+                    memcpy(manager_create_response + sizeof(uint8_t) + sizeof(int32_t), error_message, MAX_PUB_MESSAGE);
+
+                    ALWAYS_ASSERT(write(client_fifo, manager_create_response, sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE) == sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE, "Couldn't write in clients fifo");
+                    ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                     break;
                 }
 
-                int new_box = tfs_open(box_name, O_CREAT);
+                int new_box = tfs_open(box_name, TFS_O_CREAT);
                 if (new_box == -1){
+                    char error_message[] = "Error: box limit exceeded";
+                    return_code = -1;
+                    memcpy(manager_create_response + sizeof(uint8_t), &return_code, sizeof(int32_t));
+                    memcpy(manager_create_response + sizeof(uint8_t) + sizeof(int32_t), error_message, MAX_PUB_MESSAGE);
+                    ALWAYS_ASSERT(write(client_fifo, manager_create_response, sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE) == sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE, "Couldn't write in clients fifo");
+                    ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                     break;
                 }
-        
+                return_code = 0;
+                memcpy(manager_create_response + sizeof(uint8_t), &return_code, sizeof(int32_t));
+                
+                ALWAYS_ASSERT(write(client_fifo, manager_create_response, sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE) == sizeof(uint8_t) + sizeof(int32_t) + MAX_PUB_MESSAGE, "Couldn't write in clients fifo");
                 ALWAYS_ASSERT(tfs_close(new_box) != -1, "worker thread manager create error: couldn't close created box");
+                ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                 break;
             case 5:
                 client_fifo = open(client_pipe_name, O_WRONLY);
@@ -228,6 +253,7 @@ int main(int argc, char **argv) {
 
     ssize_t words = 0;
     while(true){
+        //QUESTIONS temos que ler o tamanho certo de cada code?
         void *buffer = malloc(sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
         memset(buffer, 0, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
         words = read(server, buffer, sizeof(uint8_t) + MAX_CLIENT_PIPE + MAX_BOX_NAME);
