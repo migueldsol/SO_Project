@@ -25,19 +25,27 @@ void pthread_read_lock_broker(m_broker_values *broker) {
     ALWAYS_ASSERT(pthread_rwlock_rdlock(&(broker->boxes_lock)) == 0,
                   "pthread_read_lock: failed to lock");
 }
-/*
+
 void pthread_m_lock_box(box *boxes) {
-    pthread_mutex_t *mutex = get_mutex_table();
     ALWAYS_ASSERT(pthread_mutex_lock(&(boxes->box_lock)) == 0,
                   "pthread_mutex_lock: failed to lock");
 }
 
 void pthread_m_unlock_box(box *boxes) {
-    pthread_mutex_t *mutex = get_mutex_table();
     ALWAYS_ASSERT(pthread_mutex_unlock(&(boxes->box_lock)) == 0,
                   "pthread_mutex_unlock: failed to unlock");
 }
-*/
+
+void pthread_broadcast_box(box *boxes){
+    ALWAYS_ASSERT(pthread_cond_broadcast(&(boxes->box_cond)) == 0,
+                  "pthread_broadcast: failed to broadcast");
+}
+
+void pthread_cond_wait_box(box *boxes){
+    ALWAYS_ASSERT(pthread_cond_wait(&(boxes->box_cond),&(boxes->box_lock)) == 0,
+                  "pthread_broadcast: failed to broadcast");
+}
+
 
 int get_box_index(char *box_name, m_broker_values *broker){
     pthread_read_lock_broker(broker);
@@ -86,11 +94,13 @@ void *worker_thread(void * arg){
                 int open_box = tfs_open(box_path, TFS_O_APPEND);
 
                 //increment publishers in box
+                pthread_m_lock_box(&important_values->boxes[box_position]);
                 important_values->boxes[box_position].number_publishers+= 1;
-
+                pthread_m_unlock_box(&important_values->boxes[box_position]);
                 //reading from publisher
                 while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) != 0){
                     //FIXMEif box nao foi apagada
+                    pthread_m_lock_box(&important_values->boxes[box_position]);
                     char * message = malloc(sizeof(char) * MAX_MESSAGE);
                     memset(message, 0, MAX_MESSAGE);
                     memcpy(message, pub_response + UINT8_T_SIZE,MAX_MESSAGE);
@@ -99,12 +109,18 @@ void *worker_thread(void * arg){
                     important_values->boxes[box_position].box_size += (uint64_t)size;
                     memset(message, 0, MAX_MESSAGE);
                     memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
+                    if(size > 0){
+                        pthread_broadcast_box(&important_values->boxes[box_position]);
+                    }
+                    pthread_m_unlock_box(&important_values->boxes[box_position]);
                 }
                 ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
                 close_fifo(client_fifo);
                 break;
             case 2:
             //SUBSCRIBER
+            //TODO precisamos de abrir e fechar o ficheiro de forma a permitir que os publishers os apaguem
+            //TODO alterar para read-write 
                 client_fifo = open_fifo(client_pipe_name, O_WRONLY);
                 //search for box
                 int box_index = get_box_index(box_name, important_values);
@@ -120,7 +136,6 @@ void *worker_thread(void * arg){
                 char *message_to_send = malloc(MAX_PUB_SUB_MESSAGE);
                 char *current_message = malloc(MAX_MESSAGE);
                 uint8_t response_code = SUBSCRIBER_MESSAGE_CODE;
-
                 //controlling how much of the file i've read
                 ssize_t read_counter = 0;
                 while(true){
@@ -129,20 +144,21 @@ void *worker_thread(void * arg){
                     //FIXME esperar que o pub escreva (com cond_wait)
                     memset(message_to_send, 0, MAX_PUB_SUB_MESSAGE);
                     memcpy(message_to_send, &response_code, UINT8_T_SIZE);
-
+                    int box_size = important_values->boxes[box_index].box_size;
+                    if(read_counter == box_size){
+                       pthread_cond_wait_box(&important_values->boxes[box_index]);
+                    }
                     //while read_current < size of box meter cond variable
                     read_current = tfs_read(open_box, message, MAX_MESSAGE);
                     ALWAYS_ASSERT(read_current != -1, "mbroker: Couldn't read the open box");
 
                     read_counter += read_current;
                     //TODO retirar espera ativa
-
                     size_t offset = 0;
                     size_t size = strlen(message);
-
+                    //TODO verificar que este codigo não separa palavras
                     while(offset != read_current && size != 0){
                         memcpy(current_message, message + offset, size + 1);
-
                         memcpy(message_to_send + UINT8_T_SIZE, current_message, MAX_MESSAGE);
 
                         if(write(client_fifo, message_to_send, MAX_PUB_SUB_MESSAGE) == -1){
