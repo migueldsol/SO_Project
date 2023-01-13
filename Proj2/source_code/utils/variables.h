@@ -41,7 +41,7 @@
 #define MAX_SERVER_REGISTER (UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME)
 // max size for the message to be sent from the server to list the boxes
 #define MAX_SERVER_BOX_LIST_REPLY                                              \
-    (UINT8_T_SIZE + MAX_BOX_NAME + 3 * UINT64_T_SIZE)
+    (2 * UINT8_T_SIZE + MAX_BOX_NAME + 3 * UINT64_T_SIZE)
 // max size for the message to be sent to the server to list the boxes
 #define MAX_SERVER_BOX_LIST (UINT8_T_SIZE + MAX_PIPE_NAME)
 // max size for the message to be sent from the server to answer to a request
