@@ -1,8 +1,6 @@
 #include "manager.h"
 #include "variables.h"
 
-
-
 void free_linked_list(struct Node *head) {
     struct Node *current = head;
     struct Node *next;
@@ -15,7 +13,8 @@ void free_linked_list(struct Node *head) {
     }
 }
 
-struct Node *newNode(uint8_t last, char *box_name, uint64_t box_size, uint64_t n_publishers, uint64_t n_subcribers){
+struct Node *newNode(uint8_t last, char *box_name, uint64_t box_size,
+                     uint64_t n_publishers, uint64_t n_subcribers) {
     struct Node *temp = (struct Node *)malloc(sizeof(struct Node));
     temp->last = last;
     temp->box_name = strdup(box_name);
@@ -26,8 +25,11 @@ struct Node *newNode(uint8_t last, char *box_name, uint64_t box_size, uint64_t n
     return temp;
 }
 
-void insertAlreadySorted(struct Node **head, uint8_t last, char *box_name, uint64_t box_size, uint64_t n_publishers, uint64_t n_subcribers){
-    struct Node *new_node = newNode(last, box_name, box_size, n_publishers, n_subcribers);
+void insertAlreadySorted(struct Node **head, uint8_t last, char *box_name,
+                         uint64_t box_size, uint64_t n_publishers,
+                         uint64_t n_subcribers) {
+    struct Node *new_node =
+        newNode(last, box_name, box_size, n_publishers, n_subcribers);
     struct Node *current;
 
     // case for beginning
@@ -48,14 +50,13 @@ void insertAlreadySorted(struct Node **head, uint8_t last, char *box_name, uint6
 
 void printList(struct Node *node) {
     while (node != NULL) {
-        fprintf(stdout, "%s %zu %zu %zu\n", node->box_name, node->box_size, node->n_publishers, node->n_subscribers);        
+        fprintf(stdout, "%s %zu %zu %zu\n", node->box_name, node->box_size,
+                node->n_publishers, node->n_subscribers);
         node = node->next;
     }
 }
 
-
-    //FIXME verificar tamanho dos args
-
+// FIXME verificar tamanho dos args
 
 int main(int argc, char **argv) {
 
@@ -64,75 +65,74 @@ int main(int argc, char **argv) {
 
     assert(argc == 5 || argc == 4);
 
-    //create FIFO
+    // create FIFO
     if (unlink(argv[2]) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[2],
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    if(mkfifo(argv[2], 0640) != 0){
+    if (mkfifo(argv[2], 0640) != 0) {
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    
-    //open server FIFO
+
+    // open server FIFO
     int register_FIFO = open(argv[1], O_WRONLY);
 
-    //QUESTIONS meto o fprintf?
-    if (register_FIFO == -1){
+    // QUESTIONS meto o fprintf?
+    if (register_FIFO == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
-    
+
     uint8_t register_code;
 
-
-    if (!strcmp(argv[3], CREATE_COMMAND)){
+    if (!strcmp(argv[3], CREATE_COMMAND)) {
         register_code = CREATE_BOX_CODE;
-    }
-    else if (!strcmp(argv[3], REMOVE_COMMAND)){
+    } else if (!strcmp(argv[3], REMOVE_COMMAND)) {
         register_code = REMOVE_BOX_CODE;
-    }
-    else if (!strcmp(argv[3], LIST_COMMAND)){
+    } else if (!strcmp(argv[3], LIST_COMMAND)) {
         register_code = LIST_SEND_CODE;
-    }
-    else{
+    } else {
         PANIC("ERROR: MANAGER COMMAND");
     }
 
-    
-    //create message to send to server
-        // message format: [ code = 3/5 ] | [ client_named_pipe_path (char[256])] | [ box_name (32)]
-        // or [code = 7 ] | [ client_named_pipe_path (char[256])]
+    // create message to send to server
+    //  message format: [ code = 3/5 ] | [ client_named_pipe_path (char[256])] |
+    //  [ box_name (32)] or [code = 7 ] | [ client_named_pipe_path (char[256])]
 
     void *register_message = malloc(MAX_SERVER_REGISTER);
     memset(register_message, 0, MAX_SERVER_REGISTER);
 
     memcpy(register_message, &register_code, UINT8_T_SIZE);
     memcpy(register_message + UINT8_T_SIZE, argv[2], strlen(argv[2]));
-    
-    if (register_code != LIST_SEND_CODE){
-        memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[4], strlen(argv[4]));
+
+    if (register_code != LIST_SEND_CODE) {
+        memcpy(register_message + UINT8_T_SIZE + MAX_PIPE_NAME, argv[4],
+               strlen(argv[4]));
     }
-    
-    assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) == MAX_SERVER_REGISTER);
+
+    assert(write(register_FIFO, register_message, MAX_SERVER_REGISTER) ==
+           MAX_SERVER_REGISTER);
     free(register_message);
-    //opens clients FIFO
+    // opens clients FIFO
     int client_FIFO = open(argv[2], O_RDONLY);
 
-    //QUESTIONS meto o fprintf?
-    if (client_FIFO == -1){
+    // QUESTIONS meto o fprintf?
+    if (client_FIFO == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
         exit(EXIT_FAILURE);
     }
 
     void *buffer = malloc(UINT8_T_SIZE);
     memset(buffer, 0, UINT8_T_SIZE);
-    //reads message
-    //  message format: [ code = 4/6 ] | [ return_code (int32_t)] | [ message (char[1024]) ]
-    //  or [ code = 8 ] | [ last (uint8_t)] | [ box_name char(32) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [ n_subscribers (uint64_t) ]
-    if(read(client_FIFO, buffer, UINT8_T_SIZE) == -1){
+    // reads message
+    //   message format: [ code = 4/6 ] | [ return_code (int32_t)] | [ message
+    //   (char[1024]) ] or [ code = 8 ] | [ last (uint8_t)] | [ box_name
+    //   char(32) ] | [ box_size (uint64_t) ] | [ n_publishers (uint64_t) ] | [
+    //   n_subscribers (uint64_t) ]
+    if (read(client_FIFO, buffer, UINT8_T_SIZE) == -1) {
         PANIC("error reading from clients pipe");
     }
     uint8_t answer_code;
@@ -200,23 +200,22 @@ int main(int argc, char **argv) {
             free_linked_list(head);
             break;
 
-        default:
-            PANIC("manager: code of command not found");
-            break;
-            
+    default:
+        PANIC("manager: code of command not found");
+        break;
     }
     free(buffer);
     close(client_FIFO);
     close(register_FIFO);
 
-    //remove client FIFO
+    // remove client FIFO
     if (unlink(argv[2]) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[2],
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    //TODO falta dar free
+    // TODO falta dar free
 
     return 0;
 }

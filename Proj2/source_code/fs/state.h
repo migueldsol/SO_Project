@@ -22,7 +22,7 @@ typedef struct {
     int d_inumber;
 } dir_entry_t;
 
-typedef enum { T_FILE, T_DIRECTORY,T_SYMLINK } inode_type;
+typedef enum { T_FILE, T_DIRECTORY, T_SYMLINK } inode_type;
 
 /**
  * Inode

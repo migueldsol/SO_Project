@@ -3,7 +3,7 @@
 #include "producer-consumer.h"
 #include <stdint.h>
 
-typedef struct{
+typedef struct {
     char *name;
     uint64_t number_subscribers;
     uint64_t number_publishers;
