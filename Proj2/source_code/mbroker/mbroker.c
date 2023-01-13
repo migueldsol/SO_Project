@@ -230,8 +230,8 @@ void *worker_thread(void * arg){
                     printf("mbroker: Couldn't open the client's fifo");
                     break;
                 }
-                void *message_list = malloc(MAX_PUB_SUB_MESSAGE);
-                memset(message_list, 0, MAX_PUB_SUB_MESSAGE);
+                void *message_list = malloc(MAX_SERVER_BOX_LIST_REPLY);
+                memset(message_list, 0, MAX_SERVER_BOX_LIST_REPLY);
                 uint8_t last = 0;
                 if (important_values->num_box != 0){
                     for (int i = 0; i < important_values->num_box; i++){
@@ -248,18 +248,16 @@ void *worker_thread(void * arg){
                         memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME + 2 * UINT64_T_SIZE, &(important_values->boxes[i].number_subscribers), UINT64_T_SIZE);
 
 
-                        ALWAYS_ASSERT(write(client_fifo, message_list, MAX_PUB_SUB_MESSAGE) != -1, "error in writing to clients fifo");
-                        printf("wrote\n");
+                        ALWAYS_ASSERT(write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY) != -1, "error in writing to clients fifo");
                     }
                 }
                 else {
                     last = 1;
                     memcpy(message_list, &code_8, UINT8_T_SIZE); 
                     memcpy(message_list + UINT8_T_SIZE, &last, UINT8_T_SIZE);
-                    ALWAYS_ASSERT(write(client_fifo, message_list, MAX_PUB_SUB_MESSAGE) != -1, "error in writing to clients fifo");
+                    ALWAYS_ASSERT(write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY) != -1, "error in writing to clients fifo");
                 }
                 ALWAYS_ASSERT(close(client_fifo) != -1, "couldn't close clients fifo");
-                printf("left\n");
                 break;
             default:
                 PANIC("error in worker thread");
