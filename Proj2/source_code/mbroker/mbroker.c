@@ -51,9 +51,6 @@ int get_box_index(char *box_name, m_broker_values *broker){
     pthread_wr_unlock_broker(broker);
     return -1;
 }
-    //FIXME verificar tamanho dos args
-    //TODO asserts
-    //TODO handle sigint
 
 void *worker_thread(void * arg){
     m_broker_values *important_values = (m_broker_values*) arg;
@@ -64,15 +61,12 @@ void *worker_thread(void * arg){
 
         char *client_pipe_name, *box_name;
         client_pipe_name = malloc(MAX_PIPE_NAME);
-        box_name = malloc(MAX_BOX_NAME);
-        char *box_path = malloc(MAX_BOX_NAME + 1);
+        box_name = malloc(MAX_BOX_NAME + 1);
         memset(client_pipe_name, 0, MAX_PIPE_NAME);
         memset(box_name, 0, MAX_BOX_NAME);
-        memset(box_path, 0, MAX_BOX_NAME + 1);
         memcpy(client_pipe_name, elem + UINT8_T_SIZE, MAX_PIPE_NAME);
-        memcpy(box_name, elem + UINT8_T_SIZE + MAX_PIPE_NAME, MAX_BOX_NAME);
-        memcpy(box_path + 1, elem + UINT8_T_SIZE + MAX_PIPE_NAME, MAX_BOX_NAME);
-        box_path[0] = '/';
+        memcpy(box_name + 1, elem + UINT8_T_SIZE + MAX_PIPE_NAME, MAX_BOX_NAME);
+        box_name[0] = '/';
         int client_fifo;
         switch (code){
             case 1:
@@ -87,25 +81,6 @@ void *worker_thread(void * arg){
                 char *pub_response = malloc(sizeof(char) * MAX_PUB_SUB_MESSAGE);
                 memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                 int open_box = tfs_open(box_name, TFS_O_APPEND);
-                client_fifo = open(client_pipe_name, O_RDONLY);
-                ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
-                //search for the box
-                //TODO verificar quantos publishers por box
-                for (int i = 0; i < important_values->num_box; i++){
-                    //if box exist open it and start writting
-                    if (strcmp(important_values->boxes[i].name, box_name) == 0){
-                        //pthread_rwlock_unlock(&(important_values->boxes_lock));
-                        //pthread_mutex_lock(&(important_values->boxes[i].box_lock));
-
-                        //FIXME if box nao foi apagada 
-                        //TODO colocar cond variables para as box
-
-                        client_fifo = open(client_pipe_name, O_RDONLY);
-                        ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
-
-                        char *pub_response = malloc(sizeof(char) * MAX_PUB_SUB_MESSAGE);
-                        memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
-                        int open_box = tfs_open(box_path, TFS_O_APPEND);
 
                 //increment publishers in box
                 important_values->boxes[box_position].number_publishers+= 1;
@@ -204,7 +179,7 @@ void *worker_thread(void * arg){
                     break;
                 }
 
-                int new_box = tfs_open(box_path, TFS_O_CREAT);
+                int new_box = tfs_open(box_name, TFS_O_CREAT);
                 //if cannot create box
                 if (new_box == -1){
                     char error_message[] = "Error: box limit exceeded";
@@ -266,15 +241,8 @@ void *worker_thread(void * arg){
                         fprintf(stdout, "error in writing to clients fifo");
                         break;
                     }
+
                 }
-                else {
-                    last = 1;
-                    memcpy(message, &code_8, UINT8_T_SIZE); 
-                    memcpy(message + UINT8_T_SIZE, &last, UINT8_T_SIZE);
-                    ALWAYS_ASSERT(write(client_fifo, message, MAX_PUB_SUB_MESSAGE) != -1, "error in writing to clients fifo");
-                }
-                ALWAYS_ASSERT(close(client_fifo) != -1, "couldn't close clients fifo");
-                printf("left\n");
                 break;
             default:
                 PANIC("error in worker thread");
@@ -360,4 +328,3 @@ int main(int argc, char **argv) {
     return 0;
 
 }
-
