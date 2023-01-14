@@ -1,10 +1,19 @@
 #include "variables.h"
 
+int message_counter = 0;
 // QUESTIONS uint_8
+void sigint_handler(int sig) {
+    // UNSAFE: This handler uses non-async-signal-safe functions (printf(),
+    // exit();)
+    if(sig == SIGINT){
+        fprintf(stderr, "SIGINT received %d messages. Exiting...\n", message_counter);
+        exit(EXIT_FAILURE);
+    }
+}
 
 int main(int argc, char **argv) {
     assert(argc == 4);
-
+    signal(SIGINT, sigint_handler);
     //TODO dar handle a fechar o pipe
     //TODO dar handle a caixa ser removida pelo manager
     //create FIFO
@@ -13,6 +22,7 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
+
     // check if the fifo was created
     if (mkfifo(argv[2], 0640) != 0) {
         fprintf(stderr, "[ERR]: mkfifo failed: %s\n", strerror(errno));
@@ -33,7 +43,6 @@ int main(int argc, char **argv) {
     //  0001ola.fifo0\0\0\0\0....\0
     //  message format: [ code = 1 (uint8_t)] | [ client_named_pipe_path
     //  (char[256])] | [ box_name (32)]
-
     void *register_message =
         malloc(MAX_BOX_NAME + MAX_PIPE_NAME + UINT8_T_SIZE);
     uint8_t code = SUBSCRIBER_CODE;
@@ -68,6 +77,7 @@ int main(int argc, char **argv) {
         if (strlen(buffer + UINT8_T_SIZE) == 0){
             break;
         }
+        message_counter++;
         fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
     }
     free(buffer);

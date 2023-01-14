@@ -3,7 +3,6 @@
 int main(int argc, char **argv) {
 
     assert(argc == 4);
-
     //TODO dar handle a fechar o pipe
     //TODO dar handle a caixa ser removida pelo manager
     
