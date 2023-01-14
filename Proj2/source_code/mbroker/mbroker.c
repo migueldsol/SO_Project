@@ -3,6 +3,14 @@
 #include "operations.h"
 #include "mbroker.h"
 
+void pipe_sigint_handler(int signum){
+    if(signum == SIGINT){
+        fprintf(stderr, "mbroker: Received signal");
+        //TODO dar free e fechar tudo(pipes, mutexes, etc)
+        exit(EXIT_SUCCESS);
+    }
+    }
+
 int open_fifo( char *pipe_name, int flags){
     int client_fifo = open(pipe_name, flags);
     ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
@@ -59,6 +67,8 @@ int get_box_index(char *box_name, m_broker_values *broker){
     pthread_wr_unlock_broker(broker);
     return -1;
 }
+
+
 
 void *worker_thread(void * arg){
     m_broker_values *important_values = (m_broker_values*) arg;
@@ -144,16 +154,15 @@ void *worker_thread(void * arg){
                     //FIXME esperar que o pub escreva (com cond_wait)
                     memset(message_to_send, 0, MAX_PUB_SUB_MESSAGE);
                     memcpy(message_to_send, &response_code, UINT8_T_SIZE);
-                    int box_size = important_values->boxes[box_index].box_size;
+                
+                    int box_size = (int)important_values->boxes[box_index].box_size;
                     if(read_counter == box_size){
                        pthread_cond_wait_box(&important_values->boxes[box_index]);
                     }
                     //while read_current < size of box meter cond variable
                     read_current = tfs_read(open_box, message, MAX_MESSAGE);
                     ALWAYS_ASSERT(read_current != -1, "mbroker: Couldn't read the open box");
-
                     read_counter += read_current;
-                    //TODO retirar espera ativa
                     size_t offset = 0;
                     size_t size = strlen(message);
                     //TODO verificar que este codigo não separa palavras
@@ -286,6 +295,7 @@ void *worker_thread(void * arg){
 int main(int argc, char **argv) {
 
     assert(argc == 3);
+    signal(SIGINT, pipe_sigint_handler);
 
     if (unlink(argv[1]) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[1],
