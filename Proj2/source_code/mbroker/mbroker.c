@@ -3,6 +3,63 @@
 #include "operations.h"
 #include "mbroker.h"
 
+struct box *newBox(char *name){
+    struct box* temp= (struct box*)malloc(sizeof(struct box));
+    temp->name = strdup(name);
+    temp->number_publishers = 0;
+    temp->number_subscribers = 0;
+    temp->box_size = 0;
+    pthread_cond_init(&temp->box_cond, NULL);
+    pthread_mutex_init(&temp->box_lock, NULL);
+}
+
+void insertBox(struct box **head, char*name){
+    struct box *new_box =(struct box*)malloc(sizeof(struct box));
+    struct box *current;
+
+    if (*head == NULL){
+        new_box->next = *head;
+        *head = new_box;
+    } else{
+        current = *head;
+        while (current->next != NULL){
+            current = current->next;
+        }
+        new_box->next = current->next;
+        current->next = new_box;
+    }
+}
+
+struct box *getBox(struct box**head, char *name){
+    struct box *current = *head;
+
+    while (current->next != NULL){
+        if (strcmp(current->name, name) == 0){
+            return current;
+        }
+        current = current->next;
+    }
+    return NULL;
+}
+
+struct box* deleteBox(struct box**head, char *name){
+    struct box *current = *head;
+    struct box *previous = NULL;
+
+    if (current == NULL){
+        return NULL;
+    }
+
+    while (current->next != NULL && strcmp(current->name, name) != 0){
+        previous = current;
+        current = current->next;
+    }
+
+    previous->next = current->next;
+    current->next = NULL;
+    return current;
+}
+
 int open_fifo( char *pipe_name, int flags){
     int client_fifo = open(pipe_name, flags);
     ALWAYS_ASSERT(client_fifo != -1, "mbroker: Couldn't open the client's fifo");
@@ -43,7 +100,7 @@ int get_box_index(char *box_name, m_broker_values *broker){
     pthread_read_lock_broker(broker);
     int num_box = broker->num_box;
     for (int i = 0; i < num_box; i++) {
-        if (strcmp(broker->boxes[i].name, box_name) == 0) {
+        if (strcmp(broker->boxes_head[i].name, box_name) == 0) {
             pthread_wr_unlock_broker(broker);
             return i;
         }
@@ -85,8 +142,9 @@ void *worker_thread(void * arg){
                 memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                 int open_box = tfs_open(box_path, TFS_O_APPEND);
 
+
                 //increment publishers in box
-                important_values->boxes[box_position].number_publishers+= 1;
+                important_values->boxes_head[box_position].number_publishers+= 1;
 
                 //reading from publisher
                 while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) != 0){
@@ -96,7 +154,7 @@ void *worker_thread(void * arg){
                     memcpy(message, pub_response + UINT8_T_SIZE,MAX_MESSAGE);
                     ssize_t size = tfs_write(open_box, message, strlen(message) + 1);
                     //TODO verificar a escrita
-                    important_values->boxes[box_position].box_size += (uint64_t)size;
+                    important_values->boxes_head[box_position].box_size += (uint64_t)size;
                     memset(message, 0, MAX_MESSAGE);
                     memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                 }
@@ -193,7 +251,7 @@ void *worker_thread(void * arg){
                     ALWAYS_ASSERT(close(client_fifo) != -1, "mbroker: Couldn't close the client's fifo");
                     break;
                 }
-                important_values->boxes[important_values->num_box].name = box_name;
+                important_values->boxes_head[important_values->num_box].name = box_name;
                 important_values->num_box++;
                 return_code_create = 0;
                 memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
@@ -242,10 +300,10 @@ void *worker_thread(void * arg){
                         //message with code=8(uint8_t)|last(uint8_t)|box_name(char[32])|box_size(uint64_t)|n_publishers(uint_64)|n_subs(uint64_t)|
                         memcpy(message_list, &code_8, UINT8_T_SIZE); 
                         memcpy(message_list + UINT8_T_SIZE, &last, UINT8_T_SIZE);
-                        memcpy(message_list + 2* UINT8_T_SIZE, important_values->boxes[i].name, sizeof(char) * 32);
-                        memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME, &(important_values->boxes[i].box_size), UINT64_T_SIZE);
-                        memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME + UINT64_T_SIZE, &(important_values->boxes[i].number_publishers), UINT64_T_SIZE);
-                        memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME + 2 * UINT64_T_SIZE, &(important_values->boxes[i].number_subscribers), UINT64_T_SIZE);
+                        memcpy(message_list + 2* UINT8_T_SIZE, important_values->boxes_head[i].name, sizeof(char) * 32);
+                        memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME, &(important_values->boxes_head[i].box_size), UINT64_T_SIZE);
+                        memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME + UINT64_T_SIZE, &(important_values->boxes_head[i].number_publishers), UINT64_T_SIZE);
+                        memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME + 2 * UINT64_T_SIZE, &(important_values->boxes_head[i].number_subscribers), UINT64_T_SIZE);
 
 
                         ALWAYS_ASSERT(write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY) != -1, "error in writing to clients fifo");
@@ -297,10 +355,9 @@ int main(int argc, char **argv) {
 
     m_broker_values *important_values = malloc(sizeof(m_broker_values));
     
-    box *boxes = malloc(default_params.max_inode_count * sizeof(box));
     important_values->num_box = 0;
     important_values->queue = queue;
-    important_values->boxes = boxes; 
+    important_values->boxes_head = NULL; 
     pthread_rwlock_init(&(important_values->boxes_lock), NULL);
 
     pthread_t *threads = malloc(max_sessions * sizeof(pthread_t));
