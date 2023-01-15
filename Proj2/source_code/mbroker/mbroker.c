@@ -14,7 +14,12 @@ void remove_box_pub(int sig){
 
 struct box *newBox(char *name){
     struct box* temp= (struct box*)malloc(sizeof(struct box));
-    temp->name = strdup(name);
+    if (name != NULL){
+        temp->name = strdup(name);
+    }
+    else {
+        temp->name = NULL;
+    }
     temp->publisher_thread = (pthread_t *)malloc(sizeof(pthread_t));
     temp->number_publishers = 0;
     temp->number_subscribers = 0;
@@ -347,17 +352,18 @@ void *worker_thread(void * arg){
                     error_message = "Error: box doesn't exist";
                     return_code_remove = -1;
                 }
+                else {
+                    pthread_box_lock(manager_remove_box);
+                    if (manager_remove_box->number_publishers == 1){
+                        pthread_kill(*manager_remove_box->publisher_thread, SIGUSR1);
+                    }
+                    struct box *null_box = newBox(NULL);
+                    manager_remove_box->next = null_box;
+                    pthread_box_unlock(manager_remove_box);
 
-                pthread_box_lock(manager_remove_box);
-                if (manager_remove_box->number_publishers == 1){
-                    pthread_kill(*manager_remove_box->publisher_thread, SIGUSR1);
+                    pthread_box_broadcast(manager_remove_box);                      //tell the subscribers the box is closed
+                    ALWAYS_ASSERT(tfs_unlink(box_path) != -1, "Couldn't unlink box");
                 }
-                struct box *null_box = newBox(NULL);
-                manager_remove_box->next = null_box;
-                pthread_box_unlock(manager_remove_box);
-
-                pthread_box_broadcast(manager_remove_box);                      //tell the subscribers the box is closed
-                ALWAYS_ASSERT(tfs_unlink(box_path) != -1, "Couldn't unlink box");
                 memcpy(manager_remove_response + UINT8_T_SIZE, &return_code_remove, INT32_T_SIZE);
                 memcpy(manager_remove_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
                 ALWAYS_ASSERT(write(client_fifo, manager_remove_response, MAX_SERVER_REQUEST_REPLY) == MAX_SERVER_REQUEST_REPLY, "Error in writting clients fifo");
