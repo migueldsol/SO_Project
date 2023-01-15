@@ -1,12 +1,14 @@
 #include "variables.h"
 
 int message_counter = 0;
+int flag_leave = 0;
 // QUESTIONS uint_8
 void sigint_handler(int sig) {
     // UNSAFE: This handler uses non-async-signal-safe functions (printf(),
     // exit();)
     if(sig == SIGINT || sig == SIGPIPE){
         fprintf(stderr, "SIGINT received %d messages. Exiting...\n", message_counter);
+        flag_leave = 1;
         return;
     }
 }
@@ -73,15 +75,16 @@ int main(int argc, char **argv) {
     //TODO dar handle a sigint
     //reads message
     //  message format: [ code = 10 ] | [ message (char[1024]) ]
-    while(read(client_FIFO, buffer, MAX_PUB_SUB_MESSAGE) != 0){
-        if (strlen(buffer + UINT8_T_SIZE) == 0){
-            break;
-        }
-        message_counter++;
-        fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
-    }
+    while(flag_leave == 0){
+        if (read(client_FIFO, buffer, MAX_PUB_SUB_MESSAGE) > 0){
 
-    pause();
+            if (strlen(buffer + UINT8_T_SIZE) == 0){
+                break;
+            }
+            message_counter++;
+            fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
+        }
+    }
 
     free(buffer);
     close(client_FIFO);
