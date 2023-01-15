@@ -314,7 +314,10 @@ void *worker_thread(void * arg){
                     memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
                     memcpy(manager_create_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
 
-                    write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY);
+                    ssize_t manager_create = write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY);
+                    if (manager_create == -1){
+                        WARN("Error writting");
+                    }
                     close(client_fifo);
                     break;
                 }
@@ -326,7 +329,10 @@ void *worker_thread(void * arg){
                     return_code_create = -1;
                     memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
                     memcpy(manager_create_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
-                    write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY);
+                    ssize_t manager_create_1 = write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY);
+                    if (manager_create_1 == -1){
+                        WARN("Error writting");
+                    }
                     tfs_close(new_box);
                     close(client_fifo);
                     break;
@@ -334,7 +340,11 @@ void *worker_thread(void * arg){
                 insertBox(important_values, box_name);
                 return_code_create = 0;
                 memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
-                write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY);
+                ssize_t manager_create_2 = write(client_fifo, manager_create_response, MAX_SERVER_REQUEST_REPLY);
+                if (manager_create_2 == -1){
+                    WARN("Error writting");
+                }
+                if (manager_create_2 == -1){}
                 tfs_close(new_box);
                 close(client_fifo);;
                 break;
@@ -373,7 +383,11 @@ void *worker_thread(void * arg){
                 }
                 memcpy(manager_remove_response + UINT8_T_SIZE, &return_code_remove, INT32_T_SIZE);
                 memcpy(manager_remove_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
-                write(client_fifo, manager_remove_response, MAX_SERVER_REQUEST_REPLY);
+            
+                ssize_t manager_remove = write(client_fifo, manager_remove_response, MAX_SERVER_REQUEST_REPLY);
+                if (manager_remove == -1){
+                    WARN("couldnt write in manager remove");
+                }
                 break;
             case 7:
             //MANAGER list
@@ -401,7 +415,10 @@ void *worker_thread(void * arg){
                         memcpy(message_list + 2 * UINT8_T_SIZE + MAX_BOX_NAME + 2 * UINT64_T_SIZE, &(current->number_subscribers), UINT64_T_SIZE);
 
 
-                        write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY);
+                        ssize_t manager_list = write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY);
+                        if (manager_list == -1){
+                            WARN("couldnt write in manager list");
+                        }
                         current = current->next;
                     }
                     pthread_wr_unlock_broker(important_values);
@@ -410,7 +427,11 @@ void *worker_thread(void * arg){
                     last = 1;
                     memcpy(message_list, &code_8, UINT8_T_SIZE); 
                     memcpy(message_list + UINT8_T_SIZE, &last, UINT8_T_SIZE);
-                    write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY);
+
+                    ssize_t manager_list_1 = write(client_fifo, message_list, MAX_SERVER_BOX_LIST_REPLY);
+                    if (manager_list_1 == -1){
+                        WARN("couldnt write in manager list ");
+                    }
                 }
                 close(client_fifo);
                 break;
