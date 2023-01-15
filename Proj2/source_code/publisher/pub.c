@@ -41,11 +41,8 @@ int main(int argc, char **argv) {
     assert(write(register_FIFO, register_message,
                  UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME) ==
            UINT8_T_SIZE + MAX_PIPE_NAME + MAX_BOX_NAME);
-    free(register_message);
     // opens clients FIFO
     int client_FIFO = open(argv[2], O_WRONLY);
-
-    // QUESTIONS meto o fprintf?
     // check if the client fifo was opened
     if (client_FIFO == -1) {
         fprintf(stderr, "[ERR]: open failed: %s\n", strerror(errno));
@@ -56,14 +53,14 @@ int main(int argc, char **argv) {
     memset(buffer, 0, MAX_MESSAGE);
 
     char *server_command = malloc(MAX_PUB_SUB_MESSAGE);
-
-    // QUESTIONS e so \n fazemos oq?
-    // QUESTIONS se acabar em \0 termina?
     uint8_t publisher_message_code = PUBLISHER_MESSAGE_CODE;
+    //waiting for server message
     while (fgets(buffer, MAX_MESSAGE, stdin) != NULL) {
+        // check if the message is empty
         if (*buffer == '\n'){
             break;
         }
+        // remove \n
         buffer = strtok(buffer, "\n");
         size_t length = strlen(buffer);
         if (length == 0) {

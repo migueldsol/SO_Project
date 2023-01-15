@@ -228,7 +228,6 @@ int state_destroy(void) {
  *   - No free slots in inode table.
  */
 static int inode_alloc(void) {
-    // SOL esta bem
     pthread_m_lock(FREEINODE_MUTEX_ENTRIE);
     for (size_t inumber = 0; inumber < INODE_TABLE_SIZE; inumber++) {
         if ((inumber * sizeof(allocation_state_t) % BLOCK_SIZE) == 0) {
@@ -268,7 +267,6 @@ static int inode_alloc(void) {
  *   - (if creating a directory) No free data blocks.
  */
 int inode_create(inode_type i_type) {
-    // SOL esta bem
     int inumber = inode_alloc();
     if (inumber == -1) {
         return -1; // no free slots in inode table
@@ -289,8 +287,7 @@ int inode_create(inode_type i_type) {
             inode->i_data_block = -1;
             inode->hard_link = -1;
             inode->open_inode = 0;
-            pthread_wr_unlock(
-                inode); // FIXME pode ser que nao e suposto estar aqui
+            pthread_wr_unlock(inode);
             // run regular deletion process
             inode_delete(inumber);
             return -1;
@@ -305,7 +302,7 @@ int inode_create(inode_type i_type) {
         for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
             dir_entry[i].d_inumber = -1;
         }
-        pthread_wr_unlock(inode); // FIXME pode ser que nao e suposto estar aqui
+        pthread_wr_unlock(inode); 
     } break;
     case T_FILE:
         // In case of a new file, simply sets its size to 0
@@ -313,14 +310,14 @@ int inode_create(inode_type i_type) {
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = 0;
-        pthread_wr_unlock(inode); // FIXME pode ser que nao e suposto estar aqui
+        pthread_wr_unlock(inode);
         break;
     case T_SYMLINK:
         inode_table[inumber].i_size = 0;
         inode_table[inumber].i_data_block = -1;
         inode_table[inumber].hard_link = 1;
         inode_table[inumber].open_inode = -1;
-        pthread_wr_unlock(inode); // FIXME pode ser que nao e suposto estar aqui
+        pthread_wr_unlock(inode);
         break;
     default:
         PANIC("inode_create: unknown file type");
@@ -340,8 +337,6 @@ void inode_delete(int inumber) {
     insert_delay();
 
     ALWAYS_ASSERT(valid_inumber(inumber), "inode_delete: invalid inumber");
-
-    // TODO definir ordem de locks
     pthread_m_lock(FREEINODE_MUTEX_ENTRIE);
     ALWAYS_ASSERT(freeinode_ts[inumber] == TAKEN,
                   "inode_delete: inode already freed");
@@ -479,10 +474,6 @@ int add_dir_entry(inode_t *inode, char const *sub_name, int sub_inumber) {
 int find_in_dir(inode_t const *inode, char const *sub_name) {
     ALWAYS_ASSERT(inode != NULL, "find_in_dir: inode must be non-NULL");
     ALWAYS_ASSERT(sub_name != NULL, "find_in_dir: sub_name must be non-NULL");
-
-    // SOL decidir se usamos tabela em vez de colocar na estrutura
-    //   porque aqui precisamos de aceder ao inode mas nao da
-
     insert_delay(); // simulate storage access delay to inode with inumber
     if (inode->i_node_type != T_DIRECTORY) {
         return -1; // not a directory
