@@ -340,7 +340,6 @@ void *worker_thread(void * arg){
                 break;
             case 5:
             //MANAGER remove
-            //TODO remover box
                 void *manager_remove_response = malloc(MAX_SERVER_REQUEST_REPLY);
                 memset(manager_remove_response, 0, MAX_SERVER_REQUEST_REPLY);
                 uint8_t manager_remove_reponse_code = REMOVE_BOX_CODE_REPLY;
@@ -362,7 +361,6 @@ void *worker_thread(void * arg){
                         pthread_box_unlock(manager_remove_box);
                         close(client_fifo);
                         break;
-                        //TODO cant remove while pub on
                     }
                     pthread_box_unlock(manager_remove_box);
 

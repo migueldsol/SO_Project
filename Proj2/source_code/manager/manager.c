@@ -56,13 +56,7 @@ void printList(struct Node *node) {
     }
 }
 
-// FIXME verificar tamanho dos args
-
 int main(int argc, char **argv) {
-
-    //TODO dar handle a fechar o pipe
-    
-
     assert(argc == 5 || argc == 4);
 
     // create FIFO
@@ -214,8 +208,5 @@ int main(int argc, char **argv) {
                 strerror(errno));
         exit(EXIT_FAILURE);
     }
-
-    // TODO falta dar free
-
     return 0;
 }

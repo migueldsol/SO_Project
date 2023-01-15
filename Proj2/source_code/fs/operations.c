@@ -80,7 +80,7 @@ static int tfs_lookup(char const *name, inode_t const *root_inode) {
 }
 
 int tfs_open(char const *name, tfs_file_mode_t mode) {
-    // TODO condições dos locks seguidos
+
     //  Checks if the path name is valid
     if (!valid_pathname(name)) {
         printf("%s\n", name);
@@ -110,8 +110,6 @@ int tfs_open(char const *name, tfs_file_mode_t mode) {
             char *path_name = malloc(sizeof(char) * inode->i_size);
             memcpy(path_name, buffer, sizeof(char) * inode->i_size);
             pthread_rwlock_unlock(&(inode->rw_lock));
-            // FIXME help
-
             // get the inum of the file
             pthread_read_lock(root_dir_inode);
             inum = tfs_lookup(path_name, root_dir_inode);
@@ -179,7 +177,6 @@ int tfs_sym_link(char const *target, char const *link_name) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     int i_number_softlink = inode_create(T_SYMLINK);
 
-    // FIXME verificar se link_name já existe
     if (add_dir_entry(root_inode, link_name + 1, i_number_softlink) == -1 ||
         i_number_softlink == -1) {
         return -1;
@@ -207,8 +204,6 @@ int tfs_sym_link(char const *target, char const *link_name) {
 
 int tfs_link(char const *target, char const *link_name) {
 
-    // FIXME verificar se link_name já existe
-
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
     pthread_read_lock(root_inode);
     int target_i_number = tfs_lookup(target, root_inode);
@@ -227,7 +222,6 @@ int tfs_link(char const *target, char const *link_name) {
 }
 
 int tfs_close(int fhandle) {
-    // FIXME adicionar o locks de OPEN_FILE_MUTEX_ENTRIE para aceder ao inode
     // root
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
@@ -239,7 +233,6 @@ int tfs_close(int fhandle) {
 }
 
 ssize_t tfs_write(int fhandle, void const *buffer, size_t to_write) {
-    // TODO verificar os locks seguidos
     pthread_m_lock(OPEN_FILE_MUTEX_ENTRIE);
     open_file_entry_t *file = get_open_file_entry(fhandle);
     if (file == NULL) {
@@ -326,7 +319,6 @@ ssize_t tfs_read(int fhandle, void *buffer, size_t len) {
 
 int tfs_unlink(char const *target) {
     inode_t *root_inode = inode_get(ROOT_DIR_INUM);
-    // FIXME lock?
     pthread_read_lock(root_inode);
     int i_number = find_in_dir(root_inode, target + 1);
     pthread_wr_unlock(root_inode);
@@ -400,7 +392,6 @@ int tfs_copy_from_external_fs(char const *source_path, char const *dest_path) {
         } else {
             to_write = words;
         }
-        // FIXME  assert(tfs_write) para verificar se os bytes escritos são
         // iguais aos lidos
         tfs_write(location, buffer, to_write);
         counter += to_write;
