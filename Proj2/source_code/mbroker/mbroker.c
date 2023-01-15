@@ -6,6 +6,7 @@
 struct box *newBox(char *name){
     struct box* temp= (struct box*)malloc(sizeof(struct box));
     temp->name = strdup(name);
+    temp->publisher_fifo_name = NULL;
     temp->number_publishers = 0;
     temp->number_subscribers = 0;
     temp->box_size = 0;
@@ -15,6 +16,7 @@ struct box *newBox(char *name){
 }
 
 void insertBox(m_broker_values *mbroker, char*name){
+    pthread_write_lock_broker(mbroker);
     struct box *new_box = newBox(name);
     struct box *current;
 
@@ -31,29 +33,37 @@ void insertBox(m_broker_values *mbroker, char*name){
         new_box->next = current->next;
         current->next = new_box;
     }
+    pthread_wr_unlock_broker(mbroker);
 }
 
 struct box *getBox(m_broker_values *mbroker, char *name){
+    pthread_read_lock_broker(mbroker);
     struct box *current = *mbroker->boxes_head;
 
     if (current == NULL){
+        pthread_wr_unlock_broker(mbroker);
         return NULL;
     }
 
     while (current != NULL){
         if (strcmp(current->name, name) == 0){
+
+            pthread_wr_unlock_broker(mbroker);
             return current;
         }
         current = current->next;
     }
+    pthread_wr_unlock_broker(mbroker);
     return NULL;
 }
 
 struct box* deleteBox(m_broker_values *mbroker, char *name){
+    pthread_write_lock_broker(mbroker);
     struct box *current = *mbroker->boxes_head;
     struct box *previous = NULL;
 
     if (current == NULL){
+        pthread_wr_unlock_broker(mbroker);
         return NULL;
     }
 
@@ -61,12 +71,13 @@ struct box* deleteBox(m_broker_values *mbroker, char *name){
         if (strcmp(current->name, name) == 0){
             previous->next = current->next;
             current->next = NULL;
+            pthread_wr_unlock_broker(mbroker);
             return current;
         }
         previous = current;
         current = current->next;
     }
-
+    pthread_wr_unlock_broker(mbroker);
     return NULL;
 }
 
@@ -142,6 +153,7 @@ void *worker_thread(void * arg){
 
                 //increment publishers in box
                 pub_box->number_publishers += 1;
+                pub_box->publisher_fifo_name = client_pipe_name;
 
                 //reading from publisher
                 while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) != 0){
@@ -155,6 +167,10 @@ void *worker_thread(void * arg){
                     memset(message, 0, MAX_MESSAGE);
                     memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                 }
+
+                pub_box->number_publishers -= 1;
+                pub_box->publisher_fifo_name = NULL;
+                
                 ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
                 close_fifo(client_fifo);
                 break;
@@ -324,9 +340,18 @@ void *worker_thread(void * arg){
     return 0;
 }
 
+void sigint_handler(int sig) {
+
+    if(sig == SIGINT){
+        return;
+    }
+}
+
 int main(int argc, char **argv) {
 
     assert(argc == 3);
+
+    signal(SIGINT, sigint_handler);
 
     if (unlink(argv[1]) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[1],
@@ -366,6 +391,7 @@ int main(int argc, char **argv) {
         ALWAYS_ASSERT(pthread_create(&threads[i],NULL, &worker_thread, (void*)important_values) == 0, "Error creating threads");
     }
 
+
     if (mkfifo(argv[1], 0666) != 0){
         PANIC("error in creating the server fifi");
     }
@@ -393,6 +419,14 @@ int main(int argc, char **argv) {
         } 
 
         pcq_enqueue(queue, buffer);
+    }
+
+    pause();
+
+    if (unlink(argv[1]) != 0 && errno != ENOENT) {
+        fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[1],
+                strerror(errno));
+        exit(EXIT_FAILURE);
     }
 
     close(afk_server);

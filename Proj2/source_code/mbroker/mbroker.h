@@ -5,6 +5,7 @@
 
 struct box{
     char *name;
+    char *publisher_fifo_name;
     uint64_t number_subscribers;
     uint64_t number_publishers;
     pthread_mutex_t box_lock;
@@ -27,6 +28,8 @@ void insertBox(m_broker_values *mbroker, char *name);
 struct box*getBox(m_broker_values *mbroker, char *name);
 
 
-
+void pthread_write_lock_broker(m_broker_values *broker);
+void pthread_wr_unlock_broker(m_broker_values *broker);
+void pthread_read_lock_broker(m_broker_values *broker);
 
 #endif // __MBROKER_H__

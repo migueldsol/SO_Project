@@ -70,8 +70,6 @@ int main(int argc, char **argv) {
             break;
         }
 
-        printf("%s\n", buffer);
-
         // setting up command to send to server
         //   command format: [ code = 10 ] | [ message (char[1024]) ]
         memset(server_command, 0, MAX_PUB_SUB_MESSAGE);
