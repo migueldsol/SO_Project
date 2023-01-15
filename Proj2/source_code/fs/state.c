@@ -108,6 +108,23 @@ void pthread_m_unlock(int type) {
     ALWAYS_ASSERT(pthread_mutex_unlock(&mutex[type]) == 0,
                   "pthread_mutex_unlock: failed to unlock");
 }
+void pthread_mutex_inode_lock(inode_t *inode){
+    ALWAYS_ASSERT(pthread_mutex_lock(&(inode->cond_lock)) == 0,
+                "pthread_mutex_lock: failed to lock");
+}
+void pthread_mutex_inode_unlock(inode_t *inode){
+    ALWAYS_ASSERT(pthread_mutex_unlock(&(inode->cond_lock)) == 0,
+                "pthread_mutex_unlock: failed to lock");
+}
+
+void pthread_inode_cond_wait(inode_t *inode){
+    ALWAYS_ASSERT(pthread_cond_wait(&(inode->cond),&(inode->cond_lock)) == 0,
+                "pthread_cond_wait: failed to wait");
+}
+void pthread_inode_cond_signal(inode_t *inode){
+    ALWAYS_ASSERT(pthread_cond_signal(&(inode->cond)) == 0,
+                "pthread_cond_signal: failed to signal");
+}
 /**
  * Initialize FS state.
  *
@@ -150,6 +167,8 @@ int state_init(tfs_params params) {
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         freeinode_ts[i] = FREE;
         pthread_rwlock_init(&(inode_table[i].rw_lock), NULL);
+        pthread_mutex_init(&(inode_table[i].cond_lock), NULL);
+        pthread_cond_init(&(inode_table[i].cond), NULL);
     }
 
     for (size_t i = 0; i < DATA_BLOCKS; i++) {
@@ -182,6 +201,8 @@ int state_destroy(void) {
 
     for (size_t i = 0; i < INODE_TABLE_SIZE; i++) {
         pthread_rwlock_destroy(&(inode_table[i].rw_lock));
+        pthread_mutex_destroy(&(inode_table->cond_lock));
+        pthread_cond_destroy(&inode_table->cond);
     }
 
     free(fs_mutex);
@@ -567,9 +588,9 @@ int add_to_open_file_table(int inumber, size_t offset) {
             pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
 
             inode_t *new_inode = inode_get(inumber);
-            pthread_write_lock(new_inode);
-            new_inode->open_inode++;
-            pthread_wr_unlock(new_inode);
+            pthread_mutex_inode_lock(new_inode);
+            new_inode->open_inode++;                    //lock open inode
+            pthread_mutex_inode_unlock(new_inode);
             return i;
         }
         pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
@@ -598,11 +619,11 @@ void remove_from_open_file_table(int fhandle) {
     free_open_file_entries[fhandle] = FREE;
     pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
 
-    pthread_write_lock(inode);
+    pthread_mutex_inode_lock(inode);
+    inode->open_inode--;                //lock open_inode
+    pthread_mutex_inode_unlock(inode);
 
-    inode->open_inode--;
-
-    pthread_wr_unlock(inode);
+    pthread_inode_cond_signal(inode);   //signal unlink
 }
 
 /**

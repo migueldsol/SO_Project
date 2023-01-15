@@ -34,6 +34,8 @@ typedef struct {
     int hard_link;
     int open_inode;
     pthread_rwlock_t rw_lock;
+    pthread_mutex_t cond_lock;
+    pthread_cond_t cond;
 
     // in a more complete FS, more fields could exist here
 } inode_t;
@@ -76,4 +78,8 @@ void pthread_write_lock(inode_t *inode);
 void pthread_wr_unlock(inode_t *inode);
 void pthread_read_lock(inode_t *inode);
 
+void pthread_mutex_inode_lock(inode_t *inode);
+void pthread_mutex_inode_unlock(inode_t *inode);
+void pthread_inode_cond_wait(inode_t *inode);
+void pthread_inode_cond_signal(inode_t *inode);
 #endif // STATE_H
