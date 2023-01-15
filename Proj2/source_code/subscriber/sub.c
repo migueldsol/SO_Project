@@ -7,7 +7,6 @@ void sigint_handler(int sig) {
     // UNSAFE: This handler uses non-async-signal-safe functions (printf(),
     // exit();)
     if(sig == SIGINT || sig == SIGPIPE){
-        fprintf(stderr, "SIGINT received %d messages. Exiting...\n", message_counter);
         flag_leave = 1;
         return;
     }
@@ -84,8 +83,9 @@ int main(int argc, char **argv) {
             message_counter++;
             fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
         }
+    
     }
-
+    fprintf(stderr, "SIGINT received %d messages. Exiting...\n", message_counter);
     free(buffer);
     close(client_FIFO);
     close(register_FIFO);

@@ -5,7 +5,6 @@
 
 struct box{
     char *name;
-    pthread_t *publisher_thread;
     uint64_t number_subscribers;
     uint64_t number_publishers;
     pthread_mutex_t box_lock;

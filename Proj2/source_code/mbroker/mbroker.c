@@ -3,14 +3,7 @@
 #include "operations.h"
 #include "mbroker.h"
 
-int fifo_leave = 0;
-
-void remove_box_pub(int sig){
-    if (sig == SIGUSR1){
-        fifo_leave = 1;
-    }
-}
-
+int main_flag = 0;
 
 struct box *newBox(char *name){
     struct box* temp= (struct box*)malloc(sizeof(struct box));
@@ -20,7 +13,6 @@ struct box *newBox(char *name){
     else {
         temp->name = NULL;
     }
-    temp->publisher_thread = (pthread_t *)malloc(sizeof(pthread_t));
     temp->number_publishers = 0;
     temp->number_subscribers = 0;
     temp->box_size = 0;
@@ -92,6 +84,12 @@ struct box* deleteBox(m_broker_values *mbroker, char *name){
         }
         previous = current;
         current = current->next;
+    }
+    if (strcmp(current->name, name) == 0){
+        *mbroker->boxes_head = NULL;
+        mbroker->num_box--;
+        pthread_wr_unlock_broker(mbroker);
+        return current;
     }
     pthread_wr_unlock_broker(mbroker);
     return NULL;
@@ -169,6 +167,8 @@ void *worker_thread(void * arg){
                 struct box *pub_box = getBox(important_values, box_name);
 
                 if (pub_box == NULL) {
+                    client_fifo = open_fifo(client_pipe_name, O_RDONLY);            //open fifo
+                    close_fifo(client_fifo);
                     break;              //box doesn't exist
                 }
 
@@ -187,44 +187,34 @@ void *worker_thread(void * arg){
                 //increment publishers in box
                 pub_box->number_publishers += 1;
 
-                //associate publisher in box
-                *pub_box->publisher_thread = pthread_self();
-
                 pthread_box_unlock(pub_box);
 
-                signal(SIGUSR1, remove_box_pub);            //handle removing the box
                 //reading from publisher
-                while(!fifo_leave){
-                    ssize_t bytes_read = read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE);
-                    if (bytes_read == 0 || (bytes_read == -1 && errno == EINTR)){
-                        break;
+                while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) > 0){
+
+                    //FIXMEif box nao foi apagada
+                    pthread_box_lock(pub_box);
+                    char * message = malloc(sizeof(char) * MAX_MESSAGE);
+                    memset(message, 0, MAX_MESSAGE);
+                    memcpy(message, pub_response + UINT8_T_SIZE,MAX_MESSAGE);
+                    ssize_t size = tfs_write(open_box, message, strlen(message) + 1);
+
+                    if (size < strlen(message) + 1){
+                        WARN("Message exceeded file limit");
                     }
-                    else{
-                        //FIXMEif box nao foi apagada
-                        pthread_box_lock(pub_box);
-                        char * message = malloc(sizeof(char) * MAX_MESSAGE);
-                        memset(message, 0, MAX_MESSAGE);
-                        memcpy(message, pub_response + UINT8_T_SIZE,MAX_MESSAGE);
-                        ssize_t size = tfs_write(open_box, message, strlen(message) + 1);
 
-                        if (size < strlen(message) + 1){
-                            WARN("Message exceeded file limit");
-                        }
+                    pub_box->box_size += (uint64_t) size;
+                    memset(message, 0, MAX_MESSAGE);
+                    memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
+                    pthread_box_unlock(pub_box);
 
-                        pub_box->box_size += (uint64_t) size;
-                        memset(message, 0, MAX_MESSAGE);
-                        memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
-                        pthread_box_unlock(pub_box);
-
-                        pthread_box_broadcast(pub_box); 
-                    }
+                    pthread_box_broadcast(pub_box); 
                 }
                 
                 pthread_box_lock(pub_box);
                 pub_box->number_publishers -= 1;
                 pthread_box_unlock(pub_box);
                 close_fifo(client_fifo);
-                fifo_leave = 0;
                 break;
             case 2:
             //SUBSCRIBER
@@ -237,6 +227,11 @@ void *worker_thread(void * arg){
                     break;
 
                 }
+
+                pthread_box_lock(subscriber_box);
+                subscriber_box->number_subscribers++;
+                pthread_box_unlock(subscriber_box);
+
                 open_box = tfs_open(box_path, 0);
                 ALWAYS_ASSERT(open_box != -1, "error in opening box");
                 char *message = malloc(MAX_MESSAGE);
@@ -247,16 +242,9 @@ void *worker_thread(void * arg){
                 //controlling how much of the file i've read
                 ssize_t read_counter = 0;
                 while(true){
-                    //TODO se box existir
                     pthread_box_lock(subscriber_box);
                     if (read_counter == subscriber_box->box_size){
                         pthread_box_wait(subscriber_box);
-                    }
-
-                    if (subscriber_box->next != NULL && subscriber_box->next->name == NULL){
-                        pthread_box_unlock(subscriber_box);
-                        break;
-
                     }
 
                     pthread_box_unlock(subscriber_box);
@@ -290,6 +278,9 @@ void *worker_thread(void * arg){
 
                     }
                 }
+                pthread_box_lock(subscriber_box);
+                subscriber_box->number_subscribers--;
+                pthread_box_unlock(subscriber_box);
                 ALWAYS_ASSERT(tfs_close(open_box) != -1, "mbroker: Couldn't close tfs open box");
                 close_fifo(client_fifo);
                 break;
@@ -355,11 +346,14 @@ void *worker_thread(void * arg){
                 else {
                     pthread_box_lock(manager_remove_box);
                     if (manager_remove_box->number_publishers == 1){
-                        pthread_kill(*manager_remove_box->publisher_thread, SIGUSR1);
+                        pthread_box_unlock(manager_remove_box);
+
+                        break;
+                        //TODO cant remove while pub on
                     }
-                    struct box *null_box = newBox(NULL);
-                    manager_remove_box->next = null_box;
                     pthread_box_unlock(manager_remove_box);
+
+                    deleteBox(important_values, box_name);
 
                     pthread_box_broadcast(manager_remove_box);                      //tell the subscribers the box is closed
                     ALWAYS_ASSERT(tfs_unlink(box_path) != -1, "Couldn't unlink box");
@@ -421,6 +415,7 @@ void *worker_thread(void * arg){
 void sigint_handler(int sig) {
 
     if(sig == SIGINT){
+        main_flag = 1;
         return;
     }
 }
@@ -484,22 +479,22 @@ int main(int argc, char **argv) {
     ALWAYS_ASSERT(afk_server != -1, "error in opening the register pipe");
 
     ssize_t words = 0;
-    while(true){
+    while(main_flag == 0){
         //QUESTIONS temos que ler o tamanho certo de cada code?
         void *buffer = malloc(MAX_PUB_SUB_REQUEST);
         memset(buffer, 0, MAX_PUB_SUB_REQUEST);
         words = read(server, buffer, MAX_PUB_SUB_REQUEST);
-        if (words == -1){
-            PANIC("error reading from register_pipe");
+        if (main_flag == 0){
+            if (words == -1){
+                PANIC("error reading from register_pipe");
+            }
+            else if (words == 0){
+                PANIC("error, got an EOF");
+            } 
+
+            pcq_enqueue(queue, buffer);
         }
-        else if (words == 0){
-            PANIC("error, got an EOF");
-        } 
-
-        pcq_enqueue(queue, buffer);
     }
-
-    pause();
 
     if (unlink(argv[1]) != 0 && errno != ENOENT) {
         fprintf(stderr, "[ERR]: unlink(%s) failed: %s\n", argv[1],
