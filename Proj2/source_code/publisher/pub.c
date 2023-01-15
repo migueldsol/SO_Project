@@ -64,6 +64,9 @@ int main(int argc, char **argv) {
     // QUESTIONS se acabar em \0 termina?
     uint8_t publisher_message_code = PUBLISHER_MESSAGE_CODE;
     while (fgets(buffer, MAX_MESSAGE, stdin) != NULL) {
+        if (*buffer == '\n'){
+            break;
+        }
         buffer = strtok(buffer, "\n");
         size_t length = strlen(buffer);
         if (length == 0) {

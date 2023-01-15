@@ -5,7 +5,7 @@
 
 struct box{
     char *name;
-    char *publisher_fifo_name;
+    pthread_t *publisher_thread;
     uint64_t number_subscribers;
     uint64_t number_publishers;
     pthread_mutex_t box_lock;
@@ -31,5 +31,10 @@ struct box*getBox(m_broker_values *mbroker, char *name);
 void pthread_write_lock_broker(m_broker_values *broker);
 void pthread_wr_unlock_broker(m_broker_values *broker);
 void pthread_read_lock_broker(m_broker_values *broker);
+
+void pthread_box_broadcast(struct box *some_box);
+void pthread_box_wait(struct box* some_box);
+void pthread_box_lock(struct box *some_box);
+void pthread_box_unlock(struct box *some_box);
 
 #endif // __MBROKER_H__
