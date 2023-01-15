@@ -202,7 +202,6 @@ void *worker_thread(void * arg){
                     memset(message, 0, MAX_MESSAGE);
                     memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                     pthread_box_unlock(pub_box);
-
                     pthread_box_broadcast(pub_box); 
                 }
                 
@@ -236,6 +235,7 @@ void *worker_thread(void * arg){
                     pthread_box_lock(subscriber_box);
                     subscriber_box->number_subscribers--;
                     pthread_box_unlock(subscriber_box);
+                    tfs_close(open_box);
                     close(client_fifo);
                     break;
                 }
