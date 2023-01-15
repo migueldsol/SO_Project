@@ -74,15 +74,13 @@ int main(int argc, char **argv) {
     //TODO dar handle a sigint
     //reads message
     //  message format: [ code = 10 ] | [ message (char[1024]) ]
-    while(flag_leave == 0){
-        if (read(client_FIFO, buffer, MAX_PUB_SUB_MESSAGE) > 0){
-
-            if (strlen(buffer + UINT8_T_SIZE) == 0){
-                break;
-            }
-            message_counter++;
-            fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
+    while(read(client_FIFO, buffer, MAX_PUB_SUB_MESSAGE) > 0){
+        if (strlen(buffer + UINT8_T_SIZE) == 0){
+            break;
         }
+        message_counter++;
+        fprintf(stdout, "%s\n", buffer + UINT8_T_SIZE);
+
     
     }
     fprintf(stderr, "SIGINT received %d messages. Exiting...\n", message_counter);
