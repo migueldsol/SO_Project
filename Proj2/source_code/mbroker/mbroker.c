@@ -131,6 +131,7 @@ void pthread_box_unlock(struct box *some_box){
 void *worker_thread(void * arg){
     m_broker_values *important_values = (m_broker_values*) arg;
 
+    //keeping the threads running and waiting for sessions
     for(void *elem = pcq_dequeue(important_values->queue);1;elem = pcq_dequeue(important_values->queue)){
         uint8_t code;
         memcpy(&code, elem, UINT8_T_SIZE);
@@ -153,7 +154,6 @@ void *worker_thread(void * arg){
         switch (code){
             case 1:
             //PUBLISHER
-                
                 struct box *pub_box = getBox(important_values, box_name);
 
                 if (pub_box == NULL) {
@@ -167,7 +167,7 @@ void *worker_thread(void * arg){
                 if(client_fifo == -1){
                     pthread_box_unlock(pub_box);
                     break;
-                }            //open fifo
+                }                                  
                 char *pub_response = malloc(sizeof(char) * MAX_PUB_SUB_MESSAGE);
                 memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                 int open_box = tfs_open(box_path, TFS_O_APPEND);                //open box
@@ -180,25 +180,24 @@ void *worker_thread(void * arg){
                 }
 
                 //increment publishers in box
-                pub_box->number_publishers += 1;
+                pub_box->number_publishers += 1;                            //increment publishers
 
                 pthread_box_unlock(pub_box);
 
                 //reading from publisher
                 while(read(client_fifo, pub_response, MAX_PUB_SUB_MESSAGE) > 0){
 
-                    //FIXMEif box nao foi apagada
                     pthread_box_lock(pub_box);
                     char * message = malloc(sizeof(char) * MAX_MESSAGE);
                     memset(message, 0, MAX_MESSAGE);
                     memcpy(message, pub_response + UINT8_T_SIZE,MAX_MESSAGE);
-                    ssize_t size = tfs_write(open_box, message, strlen(message) + 1);
+                    ssize_t size = tfs_write(open_box, message, strlen(message) + 1);               //write in tfs file
 
                     if (size < strlen(message) + 1){
                         WARN("Message exceeded file limit");
                     }
 
-                    pub_box->box_size += (uint64_t) size;
+                    pub_box->box_size += (uint64_t) size;                                           //increment file size
                     memset(message, 0, MAX_MESSAGE);
                     memset(pub_response, 0, MAX_PUB_SUB_MESSAGE);
                     pthread_box_unlock(pub_box);
@@ -206,7 +205,7 @@ void *worker_thread(void * arg){
                 }
                 
                 pthread_box_lock(pub_box);
-                pub_box->number_publishers -= 1;
+                pub_box->number_publishers -= 1;                                                    //decrement publishers
                 pthread_box_unlock(pub_box);
                 tfs_close(open_box);
                 close(client_fifo);
@@ -219,21 +218,21 @@ void *worker_thread(void * arg){
                 }
                 //search for box
                 struct box *subscriber_box = getBox(important_values, box_name);
-                if (subscriber_box == NULL) {
-                    //box nao existe
+
+                if (subscriber_box == NULL) {                                                   //checks if box exists
                     close(client_fifo);
                     break;
 
                 }
 
                 pthread_box_lock(subscriber_box);
-                subscriber_box->number_subscribers++;
+                subscriber_box->number_subscribers++;                                           //increment publishers
                 pthread_box_unlock(subscriber_box);
 
                 open_box = tfs_open(box_path, 0);
-                if(open_box == -1){
+                if(open_box == -1){                                                         //if cant open tfs file end safely
                     pthread_box_lock(subscriber_box);
-                    subscriber_box->number_subscribers--;
+                    subscriber_box->number_subscribers--;                                  
                     pthread_box_unlock(subscriber_box);
                     tfs_close(open_box);
                     close(client_fifo);
@@ -267,7 +266,8 @@ void *worker_thread(void * arg){
 
                     size_t offset = 0;
                     size_t size = strlen(message);
-
+                    
+                    //reading big buffer and separating messages by "\0"
                     while(offset != read_current && size != 0){
                         memcpy(current_message, message + offset, size + 1);
 
@@ -288,7 +288,7 @@ void *worker_thread(void * arg){
                     }
                 }
                 pthread_box_lock(subscriber_box);
-                subscriber_box->number_subscribers--;
+                subscriber_box->number_subscribers--;                                   //decrementing subscribers
                 pthread_box_unlock(subscriber_box);
                 tfs_close(open_box);
                 close(client_fifo);
@@ -297,7 +297,7 @@ void *worker_thread(void * arg){
             //MANAGER create
                 struct box *manager_create_box;
                 client_fifo = open(client_pipe_name, O_WRONLY);
-                if (client_fifo == -1) {
+                if (client_fifo == -1) {                                            //cannot open fifo end safely
                     break;
                 }
                 void *manager_create_response = malloc(MAX_SERVER_REQUEST_REPLY);
@@ -308,7 +308,7 @@ void *worker_thread(void * arg){
                 //search for box with same name
                 manager_create_box = getBox(important_values, box_name);
                 //terminate
-                if (manager_create_box != NULL){
+                if (manager_create_box != NULL){                                    //if box exists
                     char error_message[] = "Error: box name already exists";
                     return_code_create = -1;
                     memcpy(manager_create_response + UINT8_T_SIZE, &return_code_create, INT32_T_SIZE);
@@ -348,11 +348,11 @@ void *worker_thread(void * arg){
                 char *error_message = "";
                 memcpy(manager_remove_response, &manager_remove_reponse_code, UINT8_T_SIZE);
                 client_fifo = open(client_pipe_name, O_WRONLY);
-                if(client_fifo == -1){
+                if(client_fifo == -1){                                          //if cannot open end safely
                     break;
                 }
                 struct box *manager_remove_box = getBox(important_values, box_name);
-                if (manager_remove_box == NULL){
+                if (manager_remove_box == NULL){                                //box doesnt exist
                     error_message = "Error: box doesn't exist";
                     return_code_remove = -1;
                 }
@@ -368,8 +368,8 @@ void *worker_thread(void * arg){
 
                     deleteBox(important_values, box_name);
 
-                    pthread_box_broadcast(manager_remove_box);                      //tell the subscribers the box is closed
-                    tfs_unlink(box_path);
+                    pthread_box_broadcast(manager_remove_box);                      //tell the subscribers to update
+                    tfs_unlink(box_path);                                           //remove file from tfs
                 }
                 memcpy(manager_remove_response + UINT8_T_SIZE, &return_code_remove, INT32_T_SIZE);
                 memcpy(manager_remove_response + UINT8_T_SIZE + INT32_T_SIZE, error_message, strlen(error_message));
@@ -434,6 +434,7 @@ int main(int argc, char **argv) {
 
     assert(argc == 3);
 
+    //handler for CTRL + C
     signal(SIGINT, sigint_handler);
 
     if (unlink(argv[1]) != 0 && errno != ENOENT) {
@@ -459,9 +460,9 @@ int main(int argc, char **argv) {
     ALWAYS_ASSERT(pcq_create(queue, (size_t) max_sessions) == 0, "pqc_create fail");
 
     //initialize threads
-
     m_broker_values *important_values = malloc(sizeof(m_broker_values));
-    
+
+    //initialize structure to send to threads
     important_values->num_box = 0;
     important_values->queue = queue;
     important_values->boxes_head = malloc(sizeof(struct box*));
@@ -479,8 +480,6 @@ int main(int argc, char **argv) {
         PANIC("error in creating the server fifi");
     }
 
-    //this makes the mbroker never stop blocking on a read since there is someone already connected
-    //  to the pipe as a writer
 
     int server = open(argv[1], O_RDONLY);
     ALWAYS_ASSERT(server != -1, "error in opening the register pipe");
@@ -489,8 +488,9 @@ int main(int argc, char **argv) {
     ALWAYS_ASSERT(afk_server != -1, "error in opening the register pipe");
 
     ssize_t words = 0;
+
+    //wait for CTRL + C
     while(main_flag == 0){
-        //QUESTIONS temos que ler o tamanho certo de cada code?
         void *buffer = malloc(MAX_PUB_SUB_REQUEST);
         memset(buffer, 0, MAX_PUB_SUB_REQUEST);
         words = read(server, buffer, MAX_PUB_SUB_REQUEST);
