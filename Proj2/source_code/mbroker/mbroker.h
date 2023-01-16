@@ -3,7 +3,7 @@
 #include "producer-consumer.h"
 #include <stdint.h>
 
-struct box{
+struct box {
     char *name;
     uint64_t number_subscribers;
     uint64_t number_publishers;
@@ -24,15 +24,14 @@ struct box *newBox(char *name);
 
 void insertBox(m_broker_values *mbroker, char *name);
 
-struct box*getBox(m_broker_values *mbroker, char *name);
-
+struct box *getBox(m_broker_values *mbroker, char *name);
 
 void pthread_write_lock_broker(m_broker_values *broker);
 void pthread_wr_unlock_broker(m_broker_values *broker);
 void pthread_read_lock_broker(m_broker_values *broker);
 
 void pthread_box_broadcast(struct box *some_box);
-void pthread_box_wait(struct box* some_box);
+void pthread_box_wait(struct box *some_box);
 void pthread_box_lock(struct box *some_box);
 void pthread_box_unlock(struct box *some_box);
 
