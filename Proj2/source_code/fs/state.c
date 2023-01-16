@@ -108,22 +108,22 @@ void pthread_m_unlock(int type) {
     ALWAYS_ASSERT(pthread_mutex_unlock(&mutex[type]) == 0,
                   "pthread_mutex_unlock: failed to unlock");
 }
-void pthread_mutex_inode_lock(inode_t *inode){
+void pthread_mutex_inode_lock(inode_t *inode) {
     ALWAYS_ASSERT(pthread_mutex_lock(&(inode->cond_lock)) == 0,
-                "pthread_mutex_lock: failed to lock");
+                  "pthread_mutex_lock: failed to lock");
 }
-void pthread_mutex_inode_unlock(inode_t *inode){
+void pthread_mutex_inode_unlock(inode_t *inode) {
     ALWAYS_ASSERT(pthread_mutex_unlock(&(inode->cond_lock)) == 0,
-                "pthread_mutex_unlock: failed to lock");
+                  "pthread_mutex_unlock: failed to lock");
 }
 
-void pthread_inode_cond_wait(inode_t *inode){
-    ALWAYS_ASSERT(pthread_cond_wait(&(inode->cond),&(inode->cond_lock)) == 0,
-                "pthread_cond_wait: failed to wait");
+void pthread_inode_cond_wait(inode_t *inode) {
+    ALWAYS_ASSERT(pthread_cond_wait(&(inode->cond), &(inode->cond_lock)) == 0,
+                  "pthread_cond_wait: failed to wait");
 }
-void pthread_inode_cond_signal(inode_t *inode){
+void pthread_inode_cond_signal(inode_t *inode) {
     ALWAYS_ASSERT(pthread_cond_signal(&(inode->cond)) == 0,
-                "pthread_cond_signal: failed to signal");
+                  "pthread_cond_signal: failed to signal");
 }
 /**
  * Initialize FS state.
@@ -302,7 +302,7 @@ int inode_create(inode_type i_type) {
         for (size_t i = 0; i < MAX_DIR_ENTRIES; i++) {
             dir_entry[i].d_inumber = -1;
         }
-        pthread_wr_unlock(inode); 
+        pthread_wr_unlock(inode);
     } break;
     case T_FILE:
         // In case of a new file, simply sets its size to 0
@@ -580,7 +580,7 @@ int add_to_open_file_table(int inumber, size_t offset) {
 
             inode_t *new_inode = inode_get(inumber);
             pthread_mutex_inode_lock(new_inode);
-            new_inode->open_inode++;                    //lock open inode
+            new_inode->open_inode++; // lock open inode
             pthread_mutex_inode_unlock(new_inode);
             return i;
         }
@@ -611,10 +611,10 @@ void remove_from_open_file_table(int fhandle) {
     pthread_m_unlock(OPEN_FILE_MUTEX_ENTRIE);
 
     pthread_mutex_inode_lock(inode);
-    inode->open_inode--;                //lock open_inode
+    inode->open_inode--; // lock open_inode
     pthread_mutex_inode_unlock(inode);
 
-    pthread_inode_cond_signal(inode);   //signal unlink
+    pthread_inode_cond_signal(inode); // signal unlink
 }
 
 /**

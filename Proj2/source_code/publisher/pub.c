@@ -54,10 +54,10 @@ int main(int argc, char **argv) {
 
     char *server_command = malloc(MAX_PUB_SUB_MESSAGE);
     uint8_t publisher_message_code = PUBLISHER_MESSAGE_CODE;
-    //waiting for server message
+    // waiting for server message
     while (fgets(buffer, MAX_MESSAGE, stdin) != NULL) {
         // check if the message is empty
-        if (*buffer == '\n'){
+        if (*buffer == '\n') {
             break;
         }
         // remove \n

@@ -341,8 +341,9 @@ int tfs_unlink(char const *target) {
         } else if (link_inode->hard_link == 1) {
 
             pthread_mutex_inode_lock(link_inode);
-            while (link_inode->open_inode > 0){
-                pthread_inode_cond_wait(link_inode);        //wait for all files to be closed
+            while (link_inode->open_inode > 0) {
+                pthread_inode_cond_wait(
+                    link_inode); // wait for all files to be closed
             }
             pthread_mutex_inode_unlock(link_inode);
 

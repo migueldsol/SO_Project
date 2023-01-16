@@ -1,14 +1,14 @@
 #include "producer-consumer.h"
 #include <stdlib.h>
-//This function creates a producer-consumer queue with a specified capacity.
+// This function creates a producer-consumer queue with a specified capacity.
 int pcq_create(pc_queue_t *queue, size_t capacity) {
-    //Allocate memory for the buffer
+    // Allocate memory for the buffer
     queue->pcq_buffer = malloc(capacity * sizeof(void *));
-    //If malloc fails, return -1
+    // If malloc fails, return -1
     if (queue->pcq_buffer == NULL) {
         return -1;
     }
-    //Set capacity, current size, head and tail pointers
+    // Set capacity, current size, head and tail pointers
     queue->pcq_capacity = capacity;
 
     queue->pcq_current_size = 0;
@@ -16,7 +16,7 @@ int pcq_create(pc_queue_t *queue, size_t capacity) {
     queue->pcq_head = 0;
 
     queue->pcq_tail = 0;
-    //Initialize mutexes and condition variables
+    // Initialize mutexes and condition variables
     pthread_mutex_init(&(queue->pcq_current_size_lock), NULL);
 
     pthread_mutex_init(&(queue->pcq_head_lock), NULL);
@@ -33,13 +33,13 @@ int pcq_create(pc_queue_t *queue, size_t capacity) {
 
     return 0;
 }
-//This function frees the resources used by the queue.
+// This function frees the resources used by the queue.
 int pcq_destroy(pc_queue_t *queue) {
 
     free(queue->pcq_buffer);
 
     queue->pcq_capacity = 0;
-    //Destroy mutexes and condition variables
+    // Destroy mutexes and condition variables
     pthread_mutex_destroy(&(queue->pcq_current_size_lock));
 
     pthread_mutex_destroy(&(queue->pcq_head_lock));
@@ -56,7 +56,7 @@ int pcq_destroy(pc_queue_t *queue) {
 
     return 0;
 }
-//This function adds an element to the queue.
+// This function adds an element to the queue.
 int pcq_enqueue(pc_queue_t *queue, void *elem) {
 
     pthread_mutex_lock(&(queue->pcq_tail_lock));
@@ -69,15 +69,16 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
             break;
         }
         pthread_mutex_unlock(&(queue->pcq_current_size_lock));
-        //If the queue is full, wait for a signal on the popper condition variable
+        // If the queue is full, wait for a signal on the popper condition
+        // variable
         pthread_cond_wait(&(queue->pcq_popper_condvar),
                           &(queue->pcq_popper_condvar_lock));
     }
     pthread_mutex_unlock(&(queue->pcq_popper_condvar_lock));
-    //Increase the current size of the queue
+    // Increase the current size of the queue
     queue->pcq_current_size += 1;
     pthread_mutex_unlock(&(queue->pcq_current_size_lock));
-    //Add the element to the buffer
+    // Add the element to the buffer
     queue->pcq_buffer[queue->pcq_tail] = elem;
     queue->pcq_tail += 1;
 
@@ -91,8 +92,8 @@ int pcq_enqueue(pc_queue_t *queue, void *elem) {
 
     return 0;
 }
-//This function removes an element from the queue.
-void *pcq_dequeue(pc_queue_t *queue) {  
+// This function removes an element from the queue.
+void *pcq_dequeue(pc_queue_t *queue) {
 
     pthread_mutex_lock(&(queue->pcq_head_lock));
 
@@ -104,7 +105,8 @@ void *pcq_dequeue(pc_queue_t *queue) {
             break;
         }
         pthread_mutex_unlock(&(queue->pcq_current_size_lock));
-        //If the queue is empty, wait for a signal on the pusher condition variable
+        // If the queue is empty, wait for a signal on the pusher condition
+        // variable
         pthread_cond_wait(&(queue->pcq_pusher_condvar),
                           &(queue->pcq_pusher_condvar_lock));
     }
@@ -112,7 +114,7 @@ void *pcq_dequeue(pc_queue_t *queue) {
 
     queue->pcq_current_size -= 1;
     pthread_mutex_unlock(&(queue->pcq_current_size_lock));
-    //Get the element from the buffer
+    // Get the element from the buffer
     void *elem = queue->pcq_buffer[queue->pcq_head];
 
     queue->pcq_head += 1;
