@@ -1,6 +1,6 @@
 # SO Project 2022/23
 
-Project for the subject of SO where we were tasked to implement a file system manager (Part1) and then a Message Broker
+Project for the subject of SO where we were tasked to implement a File System Manager(Part1) and then a Message Broker(Part2)
 
 # Grade: 19.41/20
 
